@@ -25,7 +25,7 @@ namespace NewforCli
         };
     }
 
-    class newfortest
+    class NewforTest
     {
         // App State
         static byte _currentColor = 0x07; // White
@@ -125,7 +125,7 @@ namespace NewforCli
 
     public class NewforClient : IDisposable
     {
-        private TcpClient _tcp;
+        private TcpClient? _tcp;
         private string _ip;
         private int _port;
 
@@ -166,6 +166,9 @@ namespace NewforCli
         {
             try
             {
+                if (_tcp == null)
+                    throw new InvalidOperationException("TCP client is not connected.");
+
                 var stream = _tcp.GetStream();
                 var pkt = new List<byte> { Wst.NAK };
                 pkt.AddRange(Encoding.ASCII.GetBytes(page.PadLeft(3, '0')));
