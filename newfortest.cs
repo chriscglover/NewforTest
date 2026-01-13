@@ -25,7 +25,7 @@ namespace NewforCli
         };
     }
 
-    class Program
+    class newfortest
     {
         // App State
         static byte _currentColor = 0x07; // White
