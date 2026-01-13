@@ -7,21 +7,25 @@ namespace NewforCli
 {
     public static class Wst
     {
-        public const byte NAK = 0x15;
-        public const byte ETX = 0x14;
-        public const byte StartBox = 0x0B;
-        public const byte EndBox = 0x0C;
-        public const byte DoubleHeight = 0x0D;
+        // Softel newfor packet markers
+        public const byte STX = 0x02;  // Start of Text (fixed from 0x15)
+        public const byte ETX = 0x03;  // End of Text (fixed from 0x14)
 
-        // Map keys to WST Colors
+        // WST control codes
+        public const byte StartBox = 0x0B;
+        public const byte EndBox = 0x0A;        // Fixed from 0x0C
+        public const byte DoubleHeight = 0x0D;
+        public const byte Space = 0x20;
+
+        // Map keys to WST Colors (Alphanumeric mode)
         public static readonly Dictionary<ConsoleKey, (string Name, byte Code)> ColorMap = new() {
-            { ConsoleKey.W, ("White", 0x07) },
-            { ConsoleKey.Y, ("Yellow", 0x03) },
-            { ConsoleKey.G, ("Green", 0x02) },
             { ConsoleKey.R, ("Red", 0x01) },
+            { ConsoleKey.G, ("Green", 0x02) },
+            { ConsoleKey.Y, ("Yellow", 0x03) },
             { ConsoleKey.B, ("Blue", 0x04) },
             { ConsoleKey.M, ("Magenta", 0x05) },
-            { ConsoleKey.A, ("Cyan", 0x06) }
+            { ConsoleKey.A, ("Cyan", 0x06) },
+            { ConsoleKey.W, ("White", 0x07) }
         };
     }
 
@@ -82,7 +86,7 @@ namespace NewforCli
                 else if (key == ConsoleKey.C)
                 {
                     client.Clear(page);
-                    Console.WriteLine($"{DateTime.Now:HH:mm:ss} | [CLEAR SENT]");
+                    Console.WriteLine($"\n{DateTime.Now:HH:mm:ss} | [CLEAR SENT]");
                 }
                 // 5. Send Subtitles
                 else if (key == ConsoleKey.D1)
@@ -146,11 +150,27 @@ namespace NewforCli
             for (int i = 0; i < lines.Length; i++)
             {
                 var data = new List<byte>();
-                if (boxed) data.Add(Wst.StartBox);
-                data.Add(color);
-                if (dh) data.Add(Wst.DoubleHeight);
-                data.AddRange(Encoding.ASCII.GetBytes(lines[i]));
-                if (boxed) data.Add(Wst.EndBox);
+
+                // Start box if enabled
+                if (boxed) data.Add(AddOddParity(Wst.StartBox));
+
+                // Color code + space (important!)
+                data.Add(AddOddParity(color));
+                data.Add(AddOddParity(Wst.Space));
+
+                // Double height + space if enabled
+                if (dh)
+                {
+                    data.Add(AddOddParity(Wst.DoubleHeight));
+                    data.Add(AddOddParity(Wst.Space));
+                }
+
+                // Add text with odd parity
+                foreach (char c in lines[i])
+                    data.Add(AddOddParity((byte)c));
+
+                // End box if enabled
+                if (boxed) data.Add(AddOddParity(Wst.EndBox));
 
                 WritePacket(page, (byte)(startRow + (i * spacing)), data.ToArray());
             }
@@ -158,8 +178,13 @@ namespace NewforCli
 
         public void Clear(string page)
         {
+            // Clear subtitle rows with spaces (with parity)
+            var spaces = new byte[40];
+            for (int j = 0; j < 40; j++)
+                spaces[j] = AddOddParity(Wst.Space);
+
             for (byte r = 18; r <= 23; r++)
-                WritePacket(page, r, Encoding.ASCII.GetBytes("                                        "));
+                WritePacket(page, r, spaces);
         }
 
         private void WritePacket(string page, byte row, byte[] data)
@@ -170,14 +195,48 @@ namespace NewforCli
                     throw new InvalidOperationException("TCP client is not connected.");
 
                 var stream = _tcp.GetStream();
-                var pkt = new List<byte> { Wst.NAK };
-                pkt.AddRange(Encoding.ASCII.GetBytes(page.PadLeft(3, '0')));
-                pkt.AddRange(Encoding.ASCII.GetBytes(row.ToString("D2")));
+                var pkt = new List<byte> { Wst.STX }; // Start with STX (0x02)
+
+                // Page number (3 ASCII digits)
+                byte[] pageBytes = Encoding.ASCII.GetBytes(page.PadLeft(3, '0'));
+                pkt.AddRange(pageBytes);
+
+                // Row number with odd parity
+                pkt.Add(AddOddParity(row));
+
+                // Data bytes (already have parity from Send method)
                 pkt.AddRange(data);
-                pkt.Add(Wst.ETX);
+
+                // Calculate checksum (XOR of all bytes from page through data)
+                byte checksum = 0;
+                for (int i = 1; i < pkt.Count; i++) // Start from index 1 (skip STX)
+                    checksum ^= pkt[i];
+
+                pkt.Add(checksum);
+                pkt.Add(Wst.ETX); // End with ETX (0x03)
+
                 stream.Write(pkt.ToArray(), 0, pkt.Count);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nError writing packet: {ex.Message}");
+            }
+        }
+
+        private byte AddOddParity(byte value)
+        {
+            value &= 0x7F; // Clear bit 7 first
+            byte count = 0;
+
+            // Count set bits in lower 7 bits
+            for (int i = 0; i < 7; i++)
+                if ((value & (1 << i)) != 0) count++;
+
+            // Set bit 7 if we have even parity (to make it odd)
+            if (count % 2 == 0)
+                value |= 0x80;
+
+            return value;
         }
 
         public void Dispose() => _tcp?.Dispose();
