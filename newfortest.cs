@@ -7,15 +7,17 @@ namespace NewforCli
 {
     public static class Wst
     {
-        // Softel newfor packet markers
-        public const byte STX = 0x02;  // Start of Text (fixed from 0x15)
-        public const byte ETX = 0x03;  // End of Text (fixed from 0x14)
+        // Softel newfor packet markers (REVISED)
+        public const byte PKT_CLEAR = 0x0E;   // Clear/Control packet type
+        public const byte PKT_DATA = 0x8F;    // Data packet type
+        public const byte PKT_START = 0x15;   // Packet start marker
 
         // WST control codes
         public const byte StartBox = 0x0B;
-        public const byte EndBox = 0x0A;        // Fixed from 0x0C
+        public const byte EndBox = 0x0A;
         public const byte DoubleHeight = 0x0D;
         public const byte Space = 0x20;
+        public const byte Padding = 0x8A;      // Padding byte for data packets
 
         // Map keys to WST Colors (Alphanumeric mode)
         public static readonly Dictionary<ConsoleKey, (string Name, byte Code)> ColorMap = new() {
@@ -141,9 +143,40 @@ namespace NewforCli
             catch { Console.WriteLine("\nError: Receiver not found."); return false; }
         }
 
+        /// <summary>
+        /// Sends the burst initialization sequence required before sending data packets.
+        /// Sequence: 0e 15 d0 d0 d0, 0e 15 15 15 15, 98
+        /// </summary>
+        private void SendBurstStart()
+        {
+            if (_tcp == null)
+                throw new InvalidOperationException("TCP client is not connected.");
+
+            var stream = _tcp.GetStream();
+
+            // Start of burst sequence
+            byte[] startBurst = { 0x0E, 0x15, 0xD0, 0xD0, 0xD0 };
+            stream.Write(startBurst, 0, startBurst.Length);
+
+            // Init confirmation
+            byte[] initConfirm = { 0x0E, 0x15, 0x15, 0x15, 0x15 };
+            stream.Write(initConfirm, 0, initConfirm.Length);
+
+            // Burst marker
+            stream.WriteByte(0x98);
+
+            stream.Flush();
+        }
+
+        /// <summary>
+        /// Sends subtitle lines to the display.
+        /// CORRECTED: Now properly sends burst initialization before data packets.
+        /// </summary>
         public void Send(string page, string[] lines, byte color, bool dh, bool boxed)
         {
-            Clear(page);
+            // CRITICAL FIX: Send burst initialization before any data
+            SendBurstStart();
+
             int spacing = dh ? 2 : 1;
             int startRow = 23 - ((lines.Length - 1) * spacing);
 
@@ -151,42 +184,98 @@ namespace NewforCli
             {
                 var data = new List<byte>();
 
-                // Start box if enabled
-                if (boxed) data.Add(AddOddParity(Wst.StartBox));
-
-                // Color code + space (important!)
-                data.Add(AddOddParity(color));
-                data.Add(AddOddParity(Wst.Space));
-
-                // Double height + space if enabled
+                // Double height control if enabled (MUST come first, before everything)
                 if (dh)
                 {
                     data.Add(AddOddParity(Wst.DoubleHeight));
                     data.Add(AddOddParity(Wst.Space));
                 }
 
+                // Add leading spaces (professional format has spaces before box)
+                data.Add(AddOddParity(Wst.Space));
+                data.Add(AddOddParity(Wst.Space));
+                data.Add(AddOddParity(Wst.Space));
+                data.Add(AddOddParity(Wst.Space));
+
+                // Start box if enabled
+                if (boxed)
+                {
+                    data.Add(AddOddParity(Wst.StartBox));
+                    data.Add(AddOddParity(Wst.StartBox));
+                }
+
+                // Color code (without extra space after)
+                data.Add(AddOddParity(color));
+                data.Add(AddOddParity(Wst.Space));
+
                 // Add text with odd parity
                 foreach (char c in lines[i])
                     data.Add(AddOddParity((byte)c));
 
-                // End box if enabled
-                if (boxed) data.Add(AddOddParity(Wst.EndBox));
+                // Padding with 0x8A to match professional format
+                while (data.Count < 40)
+                    data.Add(Wst.Padding);
 
                 WritePacket(page, (byte)(startRow + (i * spacing)), data.ToArray());
             }
+
+            // Send end marker
+            SendEndMarker();
         }
 
+        /// <summary>
+        /// Clears the display by sending burst start followed immediately by end marker.
+        /// CORRECTED: Now uses proper clear sequence instead of treating init as clear.
+        /// </summary>
         public void Clear(string page)
         {
-            // Clear subtitle rows with spaces (with parity)
-            var spaces = new byte[40];
-            for (int j = 0; j < 40; j++)
-                spaces[j] = AddOddParity(Wst.Space);
+            try
+            {
+                if (_tcp == null)
+                    throw new InvalidOperationException("TCP client is not connected.");
 
-            for (byte r = 18; r <= 23; r++)
-                WritePacket(page, r, spaces);
+                // Send burst start (this initializes/clears the display)
+                SendBurstStart();
+
+                // Immediately send end marker (no data packets = clear screen)
+                SendEndMarker();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nError clearing page: {ex.Message}");
+            }
         }
 
+        /// <summary>
+        /// Sends the special demo clear sequence observed in packet captures.
+        /// Sequence: 0e 15 c7 c7 c7
+        /// This is different from normal clear and appears to be a "reset/end demo" command.
+        /// </summary>
+        public void ClearDemo()
+        {
+            try
+            {
+                if (_tcp == null)
+                    throw new InvalidOperationException("TCP client is not connected.");
+
+                var stream = _tcp.GetStream();
+
+                // Demo clear sequence (c7 c7 c7 instead of d0 d0 d0)
+                byte[] demoClear = { 0x0E, 0x15, 0xC7, 0xC7, 0xC7 };
+                stream.Write(demoClear, 0, demoClear.Length);
+
+                stream.Flush();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nError sending demo clear: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Writes a data packet with the correct Newfor protocol structure.
+        /// Structure: 8f c7 02 [row with parity] [40 bytes data]
+        /// </summary>
         private void WritePacket(string page, byte row, byte[] data)
         {
             try
@@ -195,27 +284,26 @@ namespace NewforCli
                     throw new InvalidOperationException("TCP client is not connected.");
 
                 var stream = _tcp.GetStream();
-                var pkt = new List<byte> { Wst.STX }; // Start with STX (0x02)
+                var pkt = new List<byte>();
 
-                // Page number (3 ASCII digits)
-                byte[] pageBytes = Encoding.ASCII.GetBytes(page.PadLeft(3, '0'));
-                pkt.AddRange(pageBytes);
+                // Data packet header (observed from professional capture)
+                pkt.Add(Wst.PKT_DATA);  // 0x8F
 
-                // Row number with odd parity
+                // Second byte - consistently 0xC7 in professional captures
+                pkt.Add(0xC7);
+
+                // Third byte - consistently 0x02 in professional captures
+                pkt.Add(0x02);
+
+                // Row number with parity
                 pkt.Add(AddOddParity(row));
 
-                // Data bytes (already have parity from Send method)
+                // Data payload (already has parity and padding)
                 pkt.AddRange(data);
 
-                // Calculate checksum (XOR of all bytes from page through data)
-                byte checksum = 0;
-                for (int i = 1; i < pkt.Count; i++) // Start from index 1 (skip STX)
-                    checksum ^= pkt[i];
-
-                pkt.Add(checksum);
-                pkt.Add(Wst.ETX); // End with ETX (0x03)
-
+                // Write packet
                 stream.Write(pkt.ToArray(), 0, pkt.Count);
+                stream.Flush();
             }
             catch (Exception ex)
             {
@@ -223,6 +311,33 @@ namespace NewforCli
             }
         }
 
+        /// <summary>
+        /// Sends the end-of-burst marker (0x10).
+        /// This signals the end of a transmission burst.
+        /// </summary>
+        private void SendEndMarker()
+        {
+            try
+            {
+                if (_tcp == null)
+                    throw new InvalidOperationException("TCP client is not connected.");
+
+                var stream = _tcp.GetStream();
+
+                // Send end-of-transmission marker
+                stream.WriteByte(0x10);
+                stream.Flush();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nError sending end marker: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Adds odd parity to a byte (sets bit 7 if needed to make total bit count odd).
+        /// This is required for WST/Teletext transmission.
+        /// </summary>
         private byte AddOddParity(byte value)
         {
             value &= 0x7F; // Clear bit 7 first
