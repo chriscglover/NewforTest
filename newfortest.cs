@@ -1,12 +1,43 @@
-﻿using System;
+﻿/*
+ MIT License
+
+Copyright (c) 2026 Christopher Glover
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+ */
+
+using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
 
 namespace NewforCli
 {
+    public static class Globals
+    {
+        public const string Version = "1.1";
+    }
+
     public static class Wst
     {
+        
         // Softel newfor packet markers (REVISED)
         public const byte PKT_CLEAR = 0x0E;   // Clear/Control packet type
         public const byte PKT_DATA = 0x8F;    // Data packet type
@@ -38,6 +69,7 @@ namespace NewforCli
         static string _colorName = "White";
         static bool _useBox = true;
         static bool _useDouble = false;
+
 
         static void Main(string[] args)
         {
@@ -109,8 +141,9 @@ namespace NewforCli
         static void PrintDashboard(string ip, int port, string page)
         {
             Console.Clear();
+            Console.WriteLine("(c) 2026 Christopher Glover");
             Console.WriteLine("=========================================================");
-            Console.WriteLine($" NEWFOR INJECTOR | Target: {ip}:{port} | Page: {page}");
+            Console.WriteLine($" NEWFOR INJECTOR  v{Globals.Version} | Target: {ip}:{port} | Page: {page}");
             Console.WriteLine("=========================================================");
             Console.WriteLine(" [COLORS] W:White Y:Yellow G:Green R:Red B:Blue A:Cyan");
             Console.WriteLine(" [ATTRS]  X:Toggle Box  H:Toggle Double-Height");
