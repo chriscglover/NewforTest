@@ -130,7 +130,7 @@ namespace NewforCli
                     _position = VerticalPosition.Top;
                     UpdateStatusLine();
                 }
-                else if (key == ConsoleKey.M)
+                else if (key == ConsoleKey.N)
                 {
                     _position = VerticalPosition.Middle;
                     UpdateStatusLine();
@@ -169,9 +169,9 @@ namespace NewforCli
             Console.WriteLine("=========================================================");
             Console.WriteLine($" NEWFOR INJECTOR  v{Globals.Version} | Target: {ip}:{port} | Page: {page}");
             Console.WriteLine("=========================================================");
-            Console.WriteLine(" [COLORS] W:White Y:Yellow G:Green R:Red B:Blue A:Cyan");
+            Console.WriteLine(" [COLORS] W:White Y:Yellow G:Green R:Red B:Blue A:Cyan M:Magenta");
             Console.WriteLine(" [ATTRS]  X:Toggle Box  H:Toggle Double-Height");
-            Console.WriteLine(" [POSITION] T:Top  M:Middle  L:Lower");
+            Console.WriteLine(" [POSITION] T:Top  N:Middle  L:Lower");
             Console.WriteLine(" [SEND]   1:Single Line 2:Double Line  3:Triple Line");
             Console.WriteLine(" [ACTION] C:Clear Page  Q:Quit");
             Console.WriteLine("---------------------------------------------------------");
