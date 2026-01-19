@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "1.2";
+        public const string Version = "1.3";
     }
 
     public static class Wst
@@ -62,6 +62,13 @@ namespace NewforCli
         };
     }
 
+    public enum VerticalPosition
+    {
+        Top,      // Rows 2-4
+        Middle,   // Rows 11-13
+        Lower     // Rows 21-23 (default)
+    }
+
     class NewforTest
     {
         // App State
@@ -69,6 +76,7 @@ namespace NewforCli
         static string _colorName = "White";
         static bool _useBox = true;
         static bool _useDouble = false;
+        static VerticalPosition _position = VerticalPosition.Lower;
 
 
         static void Main(string[] args)
@@ -116,24 +124,40 @@ namespace NewforCli
                     _useDouble = !_useDouble;
                     UpdateStatusLine();
                 }
-                // 4. Clear
+                // 4. Position Control
+                else if (key == ConsoleKey.T)
+                {
+                    _position = VerticalPosition.Top;
+                    UpdateStatusLine();
+                }
+                else if (key == ConsoleKey.M)
+                {
+                    _position = VerticalPosition.Middle;
+                    UpdateStatusLine();
+                }
+                else if (key == ConsoleKey.L)
+                {
+                    _position = VerticalPosition.Lower;
+                    UpdateStatusLine();
+                }
+                // 5. Clear
                 else if (key == ConsoleKey.C)
                 {
                     client.Clear(page);
                     Console.WriteLine($"\n{DateTime.Now:HH:mm:ss} | [CLEAR SENT]");
                 }
-                // 5. Send Subtitles
+                // 6. Send Subtitles
                 else if (key == ConsoleKey.D1)
                 {
-                    client.Send(page, new[] { "THIS IS A SINGLE LINE" }, _currentColor, _useDouble, _useBox);
+                    client.Send(page, new[] { "THIS IS A SINGLE LINE" }, _currentColor, _useDouble, _useBox, _position);
                 }
                 else if (key == ConsoleKey.D2)
                 {
-                    client.Send(page, new[] { "THIS IS LINE ONE", "THIS IS LINE TWO" }, _currentColor, _useDouble, _useBox);
+                    client.Send(page, new[] { "THIS IS LINE ONE", "THIS IS LINE TWO" }, _currentColor, _useDouble, _useBox, _position);
                 }
                 else if (key == ConsoleKey.D3)
                 {
-                    client.Send(page, new[] { "TOP SUBTITLE LINE", "MIDDLE SUBTITLE LINE", "BOTTOM SUBTITLE LINE" }, _currentColor, _useDouble, _useBox);
+                    client.Send(page, new[] { "TOP SUBTITLE LINE", "MIDDLE SUBTITLE LINE", "BOTTOM SUBTITLE LINE" }, _currentColor, _useDouble, _useBox, _position);
                 }
             }
         }
@@ -147,6 +171,7 @@ namespace NewforCli
             Console.WriteLine("=========================================================");
             Console.WriteLine(" [COLORS] W:White Y:Yellow G:Green R:Red B:Blue A:Cyan");
             Console.WriteLine(" [ATTRS]  X:Toggle Box  H:Toggle Double-Height");
+            Console.WriteLine(" [POSITION] T:Top  M:Middle  L:Lower");
             Console.WriteLine(" [SEND]   1:Single Line 2:Double Line  3:Triple Line");
             Console.WriteLine(" [ACTION] C:Clear Page  Q:Quit");
             Console.WriteLine("---------------------------------------------------------");
@@ -158,7 +183,14 @@ namespace NewforCli
             // Clear current line and write state
             string boxStatus = _useBox ? "[BOX ON]" : "[BOX OFF]";
             string heightStatus = _useDouble ? "[DBL HIGH]" : "[NORMAL]";
-            Console.Write($"\r CURRENT MODE: {_colorName.PadRight(8)} {boxStatus.PadRight(10)} {heightStatus.PadRight(12)} ");
+            string posStatus = _position switch
+            {
+                VerticalPosition.Top => "[TOP]",
+                VerticalPosition.Middle => "[MIDDLE]",
+                VerticalPosition.Lower => "[LOWER]",
+                _ => "[LOWER]"
+            };
+            Console.Write($"\r CURRENT MODE: {_colorName.PadRight(8)} {boxStatus.PadRight(10)} {heightStatus.PadRight(12)} {posStatus.PadRight(10)} ");
         }
     }
 
@@ -264,13 +296,13 @@ namespace NewforCli
         /// CORRECTED: Sends burst start (clear) once at the beginning, then all subtitle lines as a single burst.
         /// This follows the Softel Newfor Protocol and WST teletext standard.
         /// </summary>
-        public void Send(string page, string[] lines, byte color, bool dh, bool boxed)
+        public void Send(string page, string[] lines, byte color, bool dh, bool boxed, VerticalPosition position)
         {
             // Send burst start ONCE at the beginning to clear the page
             SendBurstStart(page);
 
             int spacing = dh ? 2 : 1;
-            int startRow = 23 - ((lines.Length - 1) * spacing);
+            int startRow = CalculateStartRow(lines.Length, position, spacing);
 
             // Send all subtitle lines in the same burst (no clear between them)
             for (int i = 0; i < lines.Length; i++)
@@ -314,6 +346,25 @@ namespace NewforCli
 
             // Send end marker to complete the burst
             SendEndMarker();
+        }
+
+        /// <summary>
+        /// Calculates the starting row based on vertical position and number of lines.
+        /// Top: Starts at row 2 (row 1 is reserved for page header)
+        /// Middle: Centers around row 12
+        /// Lower: Ends at row 23 (standard subtitle position)
+        /// </summary>
+        private int CalculateStartRow(int lineCount, VerticalPosition position, int spacing)
+        {
+            int totalHeight = lineCount + ((lineCount - 1) * (spacing - 1));
+
+            return position switch
+            {
+                VerticalPosition.Top => 2,  // Start at row 2 (row 1 is page header)
+                VerticalPosition.Middle => (12 - totalHeight / 2),  // Center around row 12
+                VerticalPosition.Lower => (23 - ((lineCount - 1) * spacing)),  // Default behavior
+                _ => (23 - ((lineCount - 1) * spacing))
+            };
         }
 
         /// <summary>
