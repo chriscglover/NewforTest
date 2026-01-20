@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "1.4";
+        public const string Version = "1.5";
     }
 
     public static class Wst
@@ -317,7 +317,7 @@ namespace NewforCli
         {
             return digit switch
             {
-                0 => 0xD0,  // Confirmed: pages 888, 889
+                0 => 0x15,  // Confirmed: page 100
                 1 => 0x02,  // Confirmed: page 123
                 2 => 0x49,  // Confirmed: page 123
                 3 => 0x5E,  // Confirmed: pages 123, 333
