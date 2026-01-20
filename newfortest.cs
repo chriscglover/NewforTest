@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "1.3";
+        public const string Version = "1.4";
     }
 
     public static class Wst
@@ -81,9 +81,9 @@ namespace NewforCli
 
         static void Main(string[] args)
         {
-            string ip = "127.0.0.1";
-            int port = 1234;
-            string page = "888";
+            string? ip = null;
+            int? port = null;
+            string? page = null;
 
             // Argument Overrides
             for (int i = 0; i < args.Length; i++)
@@ -93,10 +93,33 @@ namespace NewforCli
                 if (args[i] == "--page" && i + 1 < args.Length) page = args[++i];
             }
 
-            using var client = new NewforClient(ip, port);
+            // Prompt for missing parameters
+            if (ip == null)
+            {
+                Console.Write("Enter IP address (default 127.0.0.1): ");
+                string? input = Console.ReadLine();
+                ip = string.IsNullOrWhiteSpace(input) ? "127.0.0.1" : input;
+            }
+
+            if (port == null)
+            {
+                Console.Write("Enter port (default 1234): ");
+                string? input = Console.ReadLine();
+                port = string.IsNullOrWhiteSpace(input) ? 1234 : int.Parse(input);
+            }
+
+            if (page == null)
+            {
+                Console.Write("Enter page (default 888): ");
+                string? input = Console.ReadLine();
+                page = string.IsNullOrWhiteSpace(input) ? "888" : input;
+            }
+
+            // At this point, all values are guaranteed to be non-null
+            using var client = new NewforClient(ip, port.Value);
             if (!client.Connect()) return;
 
-            PrintDashboard(ip, port, page);
+            PrintDashboard(ip, port.Value, page);
 
             while (true)
             {
@@ -146,7 +169,24 @@ namespace NewforCli
                     client.Clear(page);
                     Console.WriteLine($"\n{DateTime.Now:HH:mm:ss} | [CLEAR SENT]");
                 }
-                // 6. Send Subtitles
+                // 6. Change Page
+                else if (key == ConsoleKey.P)
+                {
+                    Console.Write($"\n{DateTime.Now:HH:mm:ss} | Enter new page number (current: {page}): ");
+                    string? input = Console.ReadLine();
+                    if (!string.IsNullOrWhiteSpace(input))
+                    {
+                        page = input;
+                        Console.WriteLine($"{DateTime.Now:HH:mm:ss} | Page changed to {page}");
+                        PrintDashboard(ip, port.Value, page);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{DateTime.Now:HH:mm:ss} | Page unchanged");
+                        UpdateStatusLine();
+                    }
+                }
+                // 7. Send Subtitles
                 else if (key == ConsoleKey.D1)
                 {
                     client.Send(page, new[] { "THIS IS A SINGLE LINE" }, _currentColor, _useDouble, _useBox, _position);
@@ -166,14 +206,14 @@ namespace NewforCli
         {
             Console.Clear();
             Console.WriteLine("(c) 2026 Christopher Glover");
-            Console.WriteLine("=========================================================");
+            Console.WriteLine("===============================================================");
             Console.WriteLine($" NEWFOR INJECTOR  v{Globals.Version} | Target: {ip}:{port} | Page: {page}");
-            Console.WriteLine("=========================================================");
+            Console.WriteLine("===============================================================");
             Console.WriteLine(" [COLORS] W:White Y:Yellow G:Green R:Red B:Blue A:Cyan M:Magenta");
             Console.WriteLine(" [ATTRS]  X:Toggle Box  H:Toggle Double-Height");
             Console.WriteLine(" [POSITION] T:Top  N:Middle  L:Lower");
             Console.WriteLine(" [SEND]   1:Single Line 2:Double Line  3:Triple Line");
-            Console.WriteLine(" [ACTION] C:Clear Page  Q:Quit");
+            Console.WriteLine(" [ACTION] C:Clear Page  P:Change Page  Q:Quit");
             Console.WriteLine("---------------------------------------------------------");
             UpdateStatusLine();
         }
@@ -205,7 +245,7 @@ namespace NewforCli
         public bool Connect()
         {
             try { _tcp = new TcpClient(_ip, _port); return true; }
-            catch { Console.WriteLine("\nError: Receiver not found."); return false; }
+            catch { Console.WriteLine($"\nError: Could not connect to: {_ip}"); return false; }
         }
 
         /// <summary>
