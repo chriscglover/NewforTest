@@ -206,9 +206,9 @@ namespace NewforCli
         {
             Console.Clear();
             Console.WriteLine("(c) 2026 Christopher Glover");
-            Console.WriteLine("===============================================================");
+            Console.WriteLine("=========================================================");
             Console.WriteLine($" NEWFOR INJECTOR  v{Globals.Version} | Target: {ip}:{port} | Page: {page}");
-            Console.WriteLine("===============================================================");
+            Console.WriteLine("=========================================================");
             Console.WriteLine(" [COLORS] W:White Y:Yellow G:Green R:Red B:Blue A:Cyan M:Magenta");
             Console.WriteLine(" [ATTRS]  X:Toggle Box  H:Toggle Double-Height");
             Console.WriteLine(" [POSITION] T:Top  N:Middle  L:Lower");
@@ -293,7 +293,7 @@ namespace NewforCli
 
             // Extract magazine (hundreds) and page digits
             int magazine = pageNum / 100;
-            if (magazine == 8) magazine = 0;  // Magazine 8 is encoded as 0 in teletext
+            // Note: In Softel NEWFOR, magazine 8 is encoded as 0xD0 (digit 8), not converted to 0
 
             int tens = (pageNum / 10) % 10;
             int units = pageNum % 10;
@@ -327,7 +327,7 @@ namespace NewforCli
                 7 => 0x2F,  // Confirmed: page 567
                 8 => 0xD0,  // Confirmed: pages 888, 889
                 9 => 0xC7,  // Confirmed: page 889
-                _ => 0xD0   // Default to 8
+                _ => 0x15   // Default to 8
             };
         }
 
