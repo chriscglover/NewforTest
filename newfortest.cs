@@ -327,7 +327,7 @@ namespace NewforCli
                 7 => 0x2F,  // Confirmed: page 567
                 8 => 0xD0,  // Confirmed: pages 888, 889
                 9 => 0xC7,  // Confirmed: page 889
-                _ => 0xD0   // Default to 0
+                _ => 0xD0   // Default to 8
             };
         }
 
