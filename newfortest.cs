@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "2.4";
+        public const string Version = "2.5";
     }
 
     public static class Wst
@@ -453,6 +453,9 @@ namespace NewforCli
             // Send CONNECT packet to establish page
             SendBurstStart(page);
 
+            // Send CLEAR command before BUILD (matching FAB sequence)
+            Clear(page);
+
             int spacing = dh ? 2 : 1;
             int startRow = CalculateStartRow(lines.Length, position, spacing);
 
@@ -544,6 +547,7 @@ namespace NewforCli
         /// <summary>
         /// Clears the subtitle display.
         /// Per official spec (page 49): CLEAR command is a single byte 0x18
+        /// FAB sends 0x98 which is 0x18 with odd parity
         /// </summary>
         public void Clear(string page)
         {
@@ -554,8 +558,8 @@ namespace NewforCli
 
                 var stream = _tcp.GetStream();
 
-                // Send CLEAR command (0x18)
-                stream.WriteByte(0x18);
+                // Send CLEAR command (0x18 with odd parity = 0x98)
+                stream.WriteByte(0x98);
                 stream.Flush();
             }
             catch (Exception ex)
