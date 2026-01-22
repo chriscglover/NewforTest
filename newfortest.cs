@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "2.8";
+        public const string Version = "3.0";
     }
 
     public static class Wst
@@ -77,7 +77,7 @@ namespace NewforCli
         static byte _currentColor = 0x07; // White
         static string _colorName = "White";
         static bool _useBox = true;
-        static bool _useDouble = false;
+        static bool _useDouble = true;
         static VerticalPosition _position = VerticalPosition.Lower;
 
         static void Main(string[] args)
@@ -153,11 +153,11 @@ namespace NewforCli
                     UpdateStatusLine();
                 }
                 // 3. Toggle Height
-                else if (key == ConsoleKey.H)
-                {
-                    _useDouble = !_useDouble;
-                    UpdateStatusLine();
-                }
+                //else if (key == ConsoleKey.H)
+                //{
+                //    _useDouble = !_useDouble;
+                //    UpdateStatusLine();
+                //}
                 // 4. Position Control
                 else if (key == ConsoleKey.T)
                 {
@@ -256,7 +256,8 @@ namespace NewforCli
             Console.WriteLine("  [M] Magenta [A] Cyan    [W] White");
             Console.WriteLine();
             Console.WriteLine("OPTIONS:");
-            Console.WriteLine("  [X] Toggle Box    [H] Toggle Double Height");
+            //Console.WriteLine("  [X] Toggle Box [H] Toggle Double Height");
+            Console.WriteLine("  [X] Toggle Box [H] Toggle Double Height");
             Console.WriteLine();
             Console.WriteLine("POSITION:");
             Console.WriteLine("  [T] Top     [N] Middle  [L] Lower (Default)");
@@ -274,7 +275,7 @@ namespace NewforCli
         {
             Console.SetCursorPosition(0, Console.WindowHeight - 1);
             string boxStatus = _useBox ? "ON" : "OFF";
-            string heightStatus = _useDouble ? "DOUBLE" : "SINGLE";
+            //string heightStatus = _useDouble ? "DOUBLE" : "SINGLE";
             string positionName = _position switch
             {
                 VerticalPosition.Top => "TOP",
@@ -284,7 +285,8 @@ namespace NewforCli
             };
 
             Console.Write(
-                $" Color: {_colorName,-7} | Box: {boxStatus,-3} | Height: {heightStatus,-6} | Position: {positionName,-6} "
+                // $" Color: {_colorName,-7} | Box: {boxStatus,-3} | Height: {heightStatus,-6} | Position: {positionName,-6} "
+                $" Color: {_colorName,-7} | Box: {boxStatus,-3} | Position: {positionName,-6} "
             );
         }
     }
@@ -466,12 +468,12 @@ namespace NewforCli
             {
                 var data = new List<byte>();
 
-                // Double height control if enabled (MUST come first, before everything)
-                if (dh)
-                {
-                    data.Add(AddOddParity(Wst.DoubleHeight));
-                    data.Add(AddOddParity(Wst.Space));
-                }
+                // Double height control code - ALWAYS added at start of line
+                // Some receivers require this even for "single height" display
+                // When dh=false, the receiver may still need the code but will 
+                // display at normal height if the row below has content
+                data.Add(AddOddParity(Wst.DoubleHeight));
+                data.Add(AddOddParity(Wst.Space));
 
                 // Add leading spaces (professional format has spaces before box)
                 data.Add(AddOddParity(Wst.Space));
