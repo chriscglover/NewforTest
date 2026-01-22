@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "2.5";
+        public const string Version = "2.7";
     }
 
     public static class Wst
@@ -529,18 +529,24 @@ namespace NewforCli
         /// Calculates the starting row based on vertical position and number of lines.
         /// Top: Starts at row 2 (row 1 is reserved for page header)
         /// Middle: Centers around row 12
-        /// Lower: Ends at row 23 (standard subtitle position)
+        /// Lower: Ends at row 22 (row 23 is often reserved for fastext links)
+        /// 
+        /// Note: Double height characters display on the specified row AND the row below,
+        /// so the last double-height line must be on row 22 (with bottom half on row 23).
+        /// Single height also uses row 22 as the last row since row 23 may not display
+        /// subtitles on some receivers.
         /// </summary>
         private int CalculateStartRow(int lineCount, VerticalPosition position, int spacing)
         {
-            int totalHeight = lineCount + ((lineCount - 1) * (spacing - 1));
+            // Last row is 22 for both modes - row 23 is often reserved for fastext
+            int lastRow = 22;
 
             return position switch
             {
                 VerticalPosition.Top => 2, // Start at row 2 (row 1 is page header)
-                VerticalPosition.Middle => (12 - totalHeight / 2), // Center around row 12
-                VerticalPosition.Lower => (23 - ((lineCount - 1) * spacing)), // Default behavior
-                _ => (23 - ((lineCount - 1) * spacing))
+                VerticalPosition.Middle => (12 - ((lineCount * spacing) / 2)), // Center around row 12
+                VerticalPosition.Lower => (lastRow - ((lineCount - 1) * spacing)),
+                _ => (lastRow - ((lineCount - 1) * spacing))
             };
         }
 
