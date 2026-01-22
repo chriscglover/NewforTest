@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "2.2";
+        public const string Version = "2.4";
     }
 
     public static class Wst
@@ -48,7 +48,7 @@ namespace NewforCli
         public const byte EndBox = 0x0A;
         public const byte DoubleHeight = 0x0D;
         public const byte Space = 0x20;
-        public const byte Padding = 0x8A; // Padding byte for data packets
+        public const byte Padding = 0xA0; // Space (0x20) with odd parity bit set
 
         // Map keys to WST Colors (Alphanumeric mode)
         public static readonly Dictionary<ConsoleKey, (string Name, byte Code)> ColorMap =
@@ -491,6 +491,13 @@ namespace NewforCli
                 foreach (char c in lines[i])
                     data.Add(AddOddParity((byte)c));
 
+                // End box if enabled (must come after text, before padding)
+                if (boxed)
+                {
+                    data.Add(AddOddParity(Wst.EndBox));
+                    data.Add(AddOddParity(Wst.EndBox));
+                }
+
                 // Padding to exactly 40 bytes - CRITICAL for protocol compliance
                 while (data.Count < 40)
                     data.Add(Wst.Padding);
@@ -593,14 +600,13 @@ namespace NewforCli
         /// <summary>
         /// Writes a BUILD packet containing all subtitle rows per official Newfor spec.
         ///
-        /// BUILD Packet Structure (page 48 of spec):
-        /// Byte 1: 0x0F (PACKET TYPE CODE for BUILD)
-        /// Byte 2: SUBTITLE DATA byte
-        ///   - Bits 7-4: Unused (set to 0)
+        /// BUILD Packet Structure (matching FAB subtitler):
+        /// Byte 1: 0x8F (BUILD command 0x0F with odd parity)
+        /// Byte 2: SUBTITLE DATA byte (Hamming 8/4 encoded)
         ///   - Bit 3: CLEAR bit (1 = clear screen, 0 = don't clear)
         ///   - Bits 2-0: Row count (number of rows in this packet, range 0-7)
         /// Then for EACH row:
-        ///   - 2 bytes: Row number (Hamming 8/4 encoded tens and units)
+        ///   - 2 bytes: Row number (Hamming 8/4 encoded, tens first then units)
         ///   - 40 bytes: Subtitle data (odd parity)
         /// </summary>
         private void WriteBuildPacket(List<(byte row, byte[] data)> rows, bool clearBit)
@@ -613,24 +619,28 @@ namespace NewforCli
                 var stream = _tcp.GetStream();
                 var pkt = new List<byte>();
 
-                // Byte 1: Packet type code for BUILD command
-                pkt.Add(0x0F);
+                // Byte 1: Packet type code for BUILD command with odd parity
+                // FAB sends 0x8F which is 0x0F with parity bit set
+                pkt.Add(0x8F);
 
-                // Byte 2: SUBTITLE DATA byte
-                // Bits 7-4: unused (0000)
+                // Byte 2: SUBTITLE DATA byte - Hamming encoded
                 // Bit 3: CLEAR bit (1 = clear, 0 = no clear)
                 // Bits 2-0: Row count (number of rows, range 0-7)
-                byte subtitleDataByte = (byte)(rows.Count & 0x07);
+                byte subtitleDataValue = (byte)(rows.Count & 0x07);
                 if (clearBit)
-                    subtitleDataByte |= 0x08; // Set bit 3 for CLEAR
-                pkt.Add(subtitleDataByte);
+                    subtitleDataValue |= 0x08; // Set bit 3 for CLEAR
+                // Hamming encode the subtitle data byte (FAB sends 0xC7 for value 9 = clear + 1 row)
+                pkt.Add(EncodeDigit(subtitleDataValue));
 
                 // Add each row's data: 2-byte row number + 40 bytes of data
                 foreach (var (row, data) in rows)
                 {
-                    // Row number encoded as TWO Hamming 8/4 bytes (tens and units)
-                    pkt.Add(EncodeDigit(row / 10)); // Tens digit
-                    pkt.Add(EncodeDigit(row % 10)); // Units digit
+                    // Row number encoded as TWO Hamming 8/4 bytes representing hex nibbles
+                    // Row as hex: high nibble first, low nibble second
+                    // e.g., row 22 = 0x16: high nibble 1, low nibble 6 → Hamming(1), Hamming(6)
+                    // e.g., row 23 = 0x17: high nibble 1, low nibble 7 → Hamming(1), Hamming(7)
+                    pkt.Add(EncodeDigit(row >> 4));   // High nibble (row / 16)
+                    pkt.Add(EncodeDigit(row & 0x0F)); // Low nibble (row % 16)
 
                     // 40 bytes of subtitle data
                     if (data.Length != 40)
@@ -662,22 +672,21 @@ namespace NewforCli
                 var stream = _tcp.GetStream();
                 var pkt = new List<byte>();
 
-                // Byte 1: Packet type code for BUILD command
-                pkt.Add(0x0F);
+                // Byte 1: Packet type code for BUILD command with parity
+                pkt.Add(0x8F);
 
-                // Byte 2: SUBTITLE DATA byte
-                // Bits 7-4: unused (0000)
+                // Byte 2: SUBTITLE DATA byte - Hamming encoded
                 // Bit 3: CLEAR bit (1 = clear, 0 = no clear)
                 // Bits 2-0: Row count (3 bits, range 0-7)
-                byte subtitleDataByte = (byte)(totalRows & 0x07); // Row count in lower 3 bits
+                byte subtitleDataValue = (byte)(totalRows & 0x07);
                 if (clearBit)
-                    subtitleDataByte |= 0x08; // Set bit 3 for CLEAR
-                pkt.Add(subtitleDataByte);
+                    subtitleDataValue |= 0x08; // Set bit 3 for CLEAR
+                pkt.Add(EncodeDigit(subtitleDataValue));
 
-                // Bytes 3-4: Row number encoded as TWO Hamming 8/4 bytes
-                // Row range is 01-23 DECIMAL, encoded as tens and units digits
-                pkt.Add(EncodeDigit(row / 10)); // Tens digit (e.g., row 23 → 2)
-                pkt.Add(EncodeDigit(row % 10)); // Units digit (e.g., row 23 → 3)
+                // Bytes 3-4: Row number encoded as TWO Hamming 8/4 bytes (hex nibbles)
+                // High nibble first, low nibble second
+                pkt.Add(EncodeDigit(row >> 4));   // High nibble
+                pkt.Add(EncodeDigit(row & 0x0F)); // Low nibble
 
                 // Bytes 5-44: Data payload - MUST be exactly 40 bytes
                 if (data.Length != 40)
