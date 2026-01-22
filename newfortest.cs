@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "2.7";
+        public const string Version = "2.8";
     }
 
     public static class Wst
@@ -518,8 +518,13 @@ namespace NewforCli
                 allRowData.Add((rowNum, data.ToArray()));
             }
 
-            // Send single BUILD packet containing ALL rows
-            WriteBuildPacket(allRowData, clearBit: true);
+            // Send each row as a separate BUILD packet (matching FAB behaviour)
+            // First row has clearBit=true, subsequent rows have clearBit=false
+            for (int i = 0; i < allRowData.Count; i++)
+            {
+                var singleRow = new List<(byte row, byte[] data)> { allRowData[i] };
+                WriteBuildPacket(singleRow, clearBit: (i == 0));
+            }
 
             // Send REVEAL to display the subtitle
             SendEndMarker();
