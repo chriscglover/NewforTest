@@ -37,37 +37,38 @@ namespace NewforCli
 
     public static class Wst
     {
-
         // Newfor protocol packet type codes (per official specification)
         public const byte PKT_CONNECT = 0x0E; // CONNECT - establishes connection and sets page
-        public const byte PKT_BUILD = 0x0F;   // BUILD - sends subtitle data
-        public const byte PKT_REVEAL = 0x10;  // REVEAL - displays the subtitle
-        public const byte PKT_CLEAR = 0x18;   // CLEAR - clears the subtitle display
+        public const byte PKT_BUILD = 0x0F; // BUILD - sends subtitle data
+        public const byte PKT_REVEAL = 0x10; // REVEAL - displays the subtitle
+        public const byte PKT_CLEAR = 0x18; // CLEAR - clears the subtitle display
 
         // WST control codes
         public const byte StartBox = 0x0B;
         public const byte EndBox = 0x0A;
         public const byte DoubleHeight = 0x0D;
         public const byte Space = 0x20;
-        public const byte Padding = 0x8A;      // Padding byte for data packets
+        public const byte Padding = 0x8A; // Padding byte for data packets
 
         // Map keys to WST Colors (Alphanumeric mode)
-        public static readonly Dictionary<ConsoleKey, (string Name, byte Code)> ColorMap = new() {
-            { ConsoleKey.R, ("Red", 0x01) },
-            { ConsoleKey.G, ("Green", 0x02) },
-            { ConsoleKey.Y, ("Yellow", 0x03) },
-            { ConsoleKey.B, ("Blue", 0x04) },
-            { ConsoleKey.M, ("Magenta", 0x05) },
-            { ConsoleKey.A, ("Cyan", 0x06) },
-            { ConsoleKey.W, ("White", 0x07) }
-        };
+        public static readonly Dictionary<ConsoleKey, (string Name, byte Code)> ColorMap =
+            new()
+            {
+                { ConsoleKey.R, ("Red", 0x01) },
+                { ConsoleKey.G, ("Green", 0x02) },
+                { ConsoleKey.Y, ("Yellow", 0x03) },
+                { ConsoleKey.B, ("Blue", 0x04) },
+                { ConsoleKey.M, ("Magenta", 0x05) },
+                { ConsoleKey.A, ("Cyan", 0x06) },
+                { ConsoleKey.W, ("White", 0x07) }
+            };
     }
 
     public enum VerticalPosition
     {
-        Top,      // Rows 2-4
-        Middle,   // Rows 11-13
-        Lower     // Rows 21-23 (default)
+        Top, // Rows 2-4
+        Middle, // Rows 11-13
+        Lower // Rows 21-23 (default)
     }
 
     class NewforTest
@@ -79,7 +80,6 @@ namespace NewforCli
         static bool _useDouble = false;
         static VerticalPosition _position = VerticalPosition.Lower;
 
-
         static void Main(string[] args)
         {
             string? ip = null;
@@ -89,9 +89,12 @@ namespace NewforCli
             // Argument Overrides
             for (int i = 0; i < args.Length; i++)
             {
-                if (args[i] == "--ip" && i + 1 < args.Length) ip = args[++i];
-                if (args[i] == "--port" && i + 1 < args.Length) port = int.Parse(args[++i]);
-                if (args[i] == "--page" && i + 1 < args.Length) page = args[++i];
+                if (args[i] == "--ip" && i + 1 < args.Length)
+                    ip = args[++i];
+                if (args[i] == "--port" && i + 1 < args.Length)
+                    port = int.Parse(args[++i]);
+                if (args[i] == "--page" && i + 1 < args.Length)
+                    page = args[++i];
             }
 
             // Prompt for missing parameters
@@ -118,7 +121,8 @@ namespace NewforCli
 
             // At this point, all values are guaranteed to be non-null
             using var client = new NewforClient(ip, port.Value);
-            if (!client.Connect()) return;
+            if (!client.Connect())
+                return;
 
             PrintDashboard(ip, port.Value, page);
 
@@ -179,7 +183,9 @@ namespace NewforCli
                 // 6. Change Page
                 else if (key == ConsoleKey.P)
                 {
-                    Console.Write($"\n{DateTime.Now:HH:mm:ss} | Enter new page number (current: {page}): ");
+                    Console.Write(
+                        $"\n{DateTime.Now:HH:mm:ss} | Enter new page number (current: {page}): "
+                    );
                     string? input = Console.ReadLine();
                     if (!string.IsNullOrWhiteSpace(input))
                     {
@@ -196,15 +202,41 @@ namespace NewforCli
                 // 7. Send Subtitles
                 else if (key == ConsoleKey.D1)
                 {
-                    client.Send(page, new[] { "THIS IS A SINGLE LINE" }, _currentColor, _useDouble, _useBox, _position);
+                    client.Send(
+                        page,
+                        new[] { "THIS IS A SINGLE LINE" },
+                        _currentColor,
+                        _useDouble,
+                        _useBox,
+                        _position
+                    );
                 }
                 else if (key == ConsoleKey.D2)
                 {
-                    client.Send(page, new[] { "THIS IS LINE ONE", "THIS IS LINE TWO" }, _currentColor, _useDouble, _useBox, _position);
+                    client.Send(
+                        page,
+                        new[] { "THIS IS LINE ONE", "THIS IS LINE TWO" },
+                        _currentColor,
+                        _useDouble,
+                        _useBox,
+                        _position
+                    );
                 }
                 else if (key == ConsoleKey.D3)
                 {
-                    client.Send(page, new[] { "TOP SUBTITLE LINE", "MIDDLE SUBTITLE LINE", "BOTTOM SUBTITLE LINE" }, _currentColor, _useDouble, _useBox, _position);
+                    client.Send(
+                        page,
+                        new[]
+                        {
+                            "TOP SUBTITLE LINE",
+                            "MIDDLE SUBTITLE LINE",
+                            "BOTTOM SUBTITLE LINE"
+                        },
+                        _currentColor,
+                        _useDouble,
+                        _useBox,
+                        _position
+                    );
                 }
             }
         }
@@ -214,7 +246,9 @@ namespace NewforCli
             Console.Clear();
             Console.WriteLine("(c) 2026 Christopher Glover");
             Console.WriteLine("===============================================================");
-            Console.WriteLine($" NEWFOR INJECTOR  v{Globals.Version} | Target: {ip}:{port} | Page: {page}");
+            Console.WriteLine(
+                $" NEWFOR INJECTOR  v{Globals.Version} | Target: {ip}:{port} | Page: {page}"
+            );
             Console.WriteLine("===============================================================");
             Console.WriteLine();
             Console.WriteLine("COLOR SELECTION:");
@@ -249,20 +283,22 @@ namespace NewforCli
                 _ => "LOWER"
             };
 
-            Console.Write($" Color: {_colorName,-7} | Box: {boxStatus,-3} | Height: {heightStatus,-6} | Position: {positionName,-6} ");
+            Console.Write(
+                $" Color: {_colorName, -7} | Box: {boxStatus, -3} | Height: {heightStatus, -6} | Position: {positionName, -6} "
+            );
         }
     }
 
     /// <summary>
     /// Newfor Client for subtitle injection.
     /// Implements the official Newfor Protocol specification.
-    /// 
+    ///
     /// Protocol Overview (5 packet types):
-    /// 
+    ///
     /// 1. CONNECT (0x0E) - Establishes connection and sets page number
     ///    Structure: 0x0E 0x00 [magazine_H] [tens_H] [units_H]
     ///    All page components are Hamming 8/4 encoded
-    /// 
+    ///
     /// 2. BUILD (0x0F) - Sends subtitle row data
     ///    Structure: 0x0F [subtitle_data] [row_hi_H] [row_lo_H] [40 bytes]
     ///    Subtitle data byte:
@@ -271,20 +307,20 @@ namespace NewforCli
     ///      Bits 2-0: Row count (3 bits, NOT Hamming encoded, range 0-7)
     ///    Row number: 2 bytes, Hamming 8/4 encoded high and low nibbles
     ///    Data: 40 bytes with odd parity
-    /// 
+    ///
     /// 3. REVEAL (0x10) - Displays the subtitle data
     ///    Structure: 0x10 (single byte)
-    /// 
+    ///
     /// 4. CLEAR (0x18) - Clears the subtitle display
     ///    Structure: 0x18 (single byte)
-    /// 
+    ///
     /// 5. DISCONNECT (0x0E) - Terminates session
     ///    Structure: 0x0E 0x00 0xC7 0xC7 0xC7 (page 999, all nines Hamming encoded)
     ///    Same as CONNECT but Magazine and Page set to illegal value of 999
-    /// 
+    ///
     /// Multi-line Subtitle Workflow:
     ///   CONNECT → BUILD(row1, clear=1) → BUILD(row2, clear=0) → BUILD(row3, clear=0) → REVEAL
-    /// 
+    ///
     /// Session Lifecycle:
     ///   CONNECT(page) → [BUILD + REVEAL cycles] → DISCONNECT
     /// </summary>
@@ -343,11 +379,11 @@ namespace NewforCli
                 // Build CONNECT packet per spec
                 var pkt = new List<byte>
                 {
-                    0x0E,                       // Byte 1: Packet type code
-                    0x00,                       // Byte 2: ZERO
-                    EncodeDigit(magazine),      // Byte 3: Magazine with Hamming 8/4
-                    EncodeDigit(tens),          // Byte 4: Tens with Hamming 8/4
-                    EncodeDigit(units)          // Byte 5: Units with Hamming 8/4
+                    0x0E, // Byte 1: Packet type code
+                    0x00, // Byte 2: ZERO
+                    EncodeDigit(magazine), // Byte 3: Magazine with Hamming 8/4
+                    EncodeDigit(tens), // Byte 4: Tens with Hamming 8/4
+                    EncodeDigit(units) // Byte 5: Units with Hamming 8/4
                 };
 
                 stream.Write(pkt.ToArray(), 0, pkt.Count);
@@ -362,10 +398,10 @@ namespace NewforCli
         /// <summary>
         /// Encodes a single hex digit (0-F) using Hamming 8/4 encoding.
         /// This encoding is used for magazine, tens, and units positions in the Newfor protocol.
-        /// 
+        ///
         /// Complete Hamming 8/4 encoding table from Teletext specification:
         /// https://pdc.ro.nu/hamming.html
-        /// 
+        ///
         /// Data nibble -> Hammed byte
         /// 0 = 0x15, 1 = 0x02, 2 = 0x49, 3 = 0x5E
         /// 4 = 0x64, 5 = 0x73, 6 = 0x38, 7 = 0x2F
@@ -376,23 +412,23 @@ namespace NewforCli
         {
             return digit switch
             {
-                0x0 => 0x15,  // 0
-                0x1 => 0x02,  // 1
-                0x2 => 0x49,  // 2
-                0x3 => 0x5E,  // 3
-                0x4 => 0x64,  // 4
-                0x5 => 0x73,  // 5
-                0x6 => 0x38,  // 6
-                0x7 => 0x2F,  // 7
-                0x8 => 0xD0,  // 8
-                0x9 => 0xC7,  // 9
-                0xA => 0x8C,  // A
-                0xB => 0x9B,  // B
-                0xC => 0xA1,  // C
-                0xD => 0xB6,  // D
-                0xE => 0xFD,  // E
-                0xF => 0xEA,  // F
-                _ => 0x15     // Default to 0
+                0x0 => 0x15, // 0
+                0x1 => 0x02, // 1
+                0x2 => 0x49, // 2
+                0x3 => 0x5E, // 3
+                0x4 => 0x64, // 4
+                0x5 => 0x73, // 5
+                0x6 => 0x38, // 6
+                0x7 => 0x2F, // 7
+                0x8 => 0xD0, // 8
+                0x9 => 0xC7, // 9
+                0xA => 0x8C, // A
+                0xB => 0x9B, // B
+                0xC => 0xA1, // C
+                0xD => 0xB6, // D
+                0xE => 0xFD, // E
+                0xF => 0xEA, // F
+                _ => 0x15 // Default to 0
             };
         }
 
@@ -404,7 +440,14 @@ namespace NewforCli
         /// CRITICAL: Clear bit is set ONLY on the first row to clear the screen.
         ///           Subsequent rows have clear bit OFF so they add to the display without clearing.
         /// </summary>
-        public void Send(string page, string[] lines, byte color, bool dh, bool boxed, VerticalPosition position)
+        public void Send(
+            string page,
+            string[] lines,
+            byte color,
+            bool dh,
+            bool boxed,
+            VerticalPosition position
+        )
         {
             // Send burst start ONCE at the beginning to clear the page
             SendBurstStart(page);
@@ -452,7 +495,9 @@ namespace NewforCli
                 // Truncate if somehow over 40 bytes (shouldn't happen but safety check)
                 if (data.Count > 40)
                 {
-                    Console.WriteLine($"\nWarning: Row data exceeded 40 bytes ({data.Count}), truncating");
+                    Console.WriteLine(
+                        $"\nWarning: Row data exceeded 40 bytes ({data.Count}), truncating"
+                    );
                     data.RemoveRange(40, data.Count - 40);
                 }
 
@@ -461,7 +506,13 @@ namespace NewforCli
                 // Subsequent rows have clear bit OFF so they ADD to the display
                 bool clearBit = (i == 0);
 
-                WritePacket(page, (byte)(startRow + (i * spacing)), data.ToArray(), clearBit, lines.Length);
+                WritePacket(
+                    page,
+                    (byte)(startRow + (i * spacing)),
+                    data.ToArray(),
+                    clearBit,
+                    lines.Length
+                );
             }
 
             // Send end marker AFTER all lines to complete the burst
@@ -480,9 +531,9 @@ namespace NewforCli
 
             return position switch
             {
-                VerticalPosition.Top => 2,  // Start at row 2 (row 1 is page header)
-                VerticalPosition.Middle => (12 - totalHeight / 2),  // Center around row 12
-                VerticalPosition.Lower => (23 - ((lineCount - 1) * spacing)),  // Default behavior
+                VerticalPosition.Top => 2, // Start at row 2 (row 1 is page header)
+                VerticalPosition.Middle => (12 - totalHeight / 2), // Center around row 12
+                VerticalPosition.Lower => (23 - ((lineCount - 1) * spacing)), // Default behavior
                 _ => (23 - ((lineCount - 1) * spacing))
             };
         }
@@ -527,11 +578,11 @@ namespace NewforCli
                 // Build DISCONNECT packet (CONNECT with page 999)
                 var pkt = new List<byte>
                 {
-                    0x0E,                       // Byte 1: Packet type code
-                    0x00,                       // Byte 2: ZERO
-                    EncodeDigit(9),             // Byte 3: Magazine = 9 (illegal)
-                    EncodeDigit(9),             // Byte 4: Tens = 9
-                    EncodeDigit(9)              // Byte 5: Units = 9
+                    0x0E, // Byte 1: Packet type code
+                    0x00, // Byte 2: ZERO
+                    EncodeDigit(9), // Byte 3: Magazine = 9 (illegal)
+                    EncodeDigit(9), // Byte 4: Tens = 9
+                    EncodeDigit(9) // Byte 5: Units = 9
                 };
 
                 stream.Write(pkt.ToArray(), 0, pkt.Count);
@@ -545,7 +596,7 @@ namespace NewforCli
 
         /// <summary>
         /// Writes a data packet with the correct Newfor protocol structure per official spec.
-        /// 
+        ///
         /// BUILD Packet Structure:
         /// Byte 1: 0x0F (PACKET TYPE CODE for BUILD)
         /// Byte 2: SUBTITLE DATA byte
@@ -572,18 +623,20 @@ namespace NewforCli
                 // Bits 7-4: unused (0000)
                 // Bit 3: CLEAR bit (1 = clear, 0 = no clear)
                 // Bits 2-0: Row count (3 bits, range 0-7)
-                byte subtitleDataByte = (byte)(totalRows & 0x07);  // Row count in lower 3 bits
+                byte subtitleDataByte = (byte)(totalRows & 0x07); // Row count in lower 3 bits
                 if (clearBit)
-                    subtitleDataByte |= 0x08;  // Set bit 3 for CLEAR
+                    subtitleDataByte |= 0x08; // Set bit 3 for CLEAR
                 pkt.Add(subtitleDataByte);
 
                 // Bytes 3-4: Row number encoded as TWO Hamming 8/4 bytes
-                pkt.Add(EncodeDigit(row / 16));  // High nibble (row/16)
-                pkt.Add(EncodeDigit(row % 16));  // Low nibble (row%16)
+                pkt.Add(EncodeDigit(row / 16)); // High nibble (row/16)
+                pkt.Add(EncodeDigit(row % 16)); // Low nibble (row%16)
 
                 // Bytes 5-44: Data payload - MUST be exactly 40 bytes
                 if (data.Length != 40)
-                    throw new InvalidOperationException($"Data must be exactly 40 bytes, got {data.Length}");
+                    throw new InvalidOperationException(
+                        $"Data must be exactly 40 bytes, got {data.Length}"
+                    );
 
                 pkt.AddRange(data);
 
@@ -632,7 +685,8 @@ namespace NewforCli
 
             // Count set bits in lower 7 bits
             for (int i = 0; i < 7; i++)
-                if ((value & (1 << i)) != 0) count++;
+                if ((value & (1 << i)) != 0)
+                    count++;
 
             // Set bit 7 if we have even parity (to make it odd)
             if (count % 2 == 0)
