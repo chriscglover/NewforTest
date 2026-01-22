@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "2.1";
+        public const string Version = "2.2";
     }
 
     public static class Wst
@@ -284,7 +284,7 @@ namespace NewforCli
             };
 
             Console.Write(
-                $" Color: {_colorName, -7} | Box: {boxStatus, -3} | Height: {heightStatus, -6} | Position: {positionName, -6} "
+                $" Color: {_colorName,-7} | Box: {boxStatus,-3} | Height: {heightStatus,-6} | Position: {positionName,-6} "
             );
         }
     }
@@ -299,14 +299,15 @@ namespace NewforCli
     ///    Structure: 0x0E 0x00 [magazine_H] [tens_H] [units_H]
     ///    All page components are Hamming 8/4 encoded
     ///
-    /// 2. BUILD (0x0F) - Sends subtitle row data
-    ///    Structure: 0x0F [subtitle_data] [row_hi_H] [row_lo_H] [40 bytes]
+    /// 2. BUILD (0x0F) - Sends subtitle row data (ALL rows in ONE packet)
+    ///    Structure: 0x0F [subtitle_data] {[row_tens_H] [row_units_H] [40 bytes]} * N
     ///    Subtitle data byte:
     ///      Bits 7-4: Unused (0000)
     ///      Bit 3: CLEAR bit (1=clear before display, 0=add to existing)
-    ///      Bits 2-0: Row count (3 bits, NOT Hamming encoded, range 0-7)
-    ///    Row number: 2 bytes, Hamming 8/4 encoded high and low nibbles
+    ///      Bits 2-0: Row count (number of rows in packet, range 0-7)
+    ///    Row number: 2 bytes, Hamming 8/4 encoded tens and units digits (row 01-23)
     ///    Data: 40 bytes with odd parity
+    ///    IMPORTANT: All rows are sent in a SINGLE BUILD packet, not one packet per row!
     ///
     /// 3. REVEAL (0x10) - Displays the subtitle data
     ///    Structure: 0x10 (single byte)
@@ -449,13 +450,15 @@ namespace NewforCli
             VerticalPosition position
         )
         {
-            // Send burst start ONCE at the beginning to clear the page
+            // Send CONNECT packet to establish page
             SendBurstStart(page);
 
             int spacing = dh ? 2 : 1;
             int startRow = CalculateStartRow(lines.Length, position, spacing);
 
-            // Send all subtitle lines in the same burst (no clear between them)
+            // Build all row data first
+            var allRowData = new List<(byte row, byte[] data)>();
+
             for (int i = 0; i < lines.Length; i++)
             {
                 var data = new List<byte>();
@@ -501,21 +504,14 @@ namespace NewforCli
                     data.RemoveRange(40, data.Count - 40);
                 }
 
-                // CRITICAL: Clear bit is set ONLY on first row (i == 0)
-                // This clears the screen before displaying the first row
-                // Subsequent rows have clear bit OFF so they ADD to the display
-                bool clearBit = (i == 0);
-
-                WritePacket(
-                    page,
-                    (byte)(startRow + (i * spacing)),
-                    data.ToArray(),
-                    clearBit,
-                    lines.Length
-                );
+                byte rowNum = (byte)(startRow + (i * spacing));
+                allRowData.Add((rowNum, data.ToArray()));
             }
 
-            // Send end marker AFTER all lines to complete the burst
+            // Send single BUILD packet containing ALL rows
+            WriteBuildPacket(allRowData, clearBit: true);
+
+            // Send REVEAL to display the subtitle
             SendEndMarker();
         }
 
@@ -595,17 +591,67 @@ namespace NewforCli
         }
 
         /// <summary>
-        /// Writes a data packet with the correct Newfor protocol structure per official spec.
+        /// Writes a BUILD packet containing all subtitle rows per official Newfor spec.
         ///
-        /// BUILD Packet Structure:
+        /// BUILD Packet Structure (page 48 of spec):
         /// Byte 1: 0x0F (PACKET TYPE CODE for BUILD)
         /// Byte 2: SUBTITLE DATA byte
         ///   - Bits 7-4: Unused (set to 0)
         ///   - Bit 3: CLEAR bit (1 = clear screen, 0 = don't clear)
-        ///   - Bits 2-0: Row count (3 bits, NOT Hamming encoded, range 0-7)
-        /// Bytes 3-4: Row number (2 bytes, Hamming 8/4 encoded high and low nibbles)
-        /// Bytes 5-44: Subtitle data (40 bytes, odd parity)
+        ///   - Bits 2-0: Row count (number of rows in this packet, range 0-7)
+        /// Then for EACH row:
+        ///   - 2 bytes: Row number (Hamming 8/4 encoded tens and units)
+        ///   - 40 bytes: Subtitle data (odd parity)
         /// </summary>
+        private void WriteBuildPacket(List<(byte row, byte[] data)> rows, bool clearBit)
+        {
+            try
+            {
+                if (_tcp == null)
+                    throw new InvalidOperationException("TCP client is not connected.");
+
+                var stream = _tcp.GetStream();
+                var pkt = new List<byte>();
+
+                // Byte 1: Packet type code for BUILD command
+                pkt.Add(0x0F);
+
+                // Byte 2: SUBTITLE DATA byte
+                // Bits 7-4: unused (0000)
+                // Bit 3: CLEAR bit (1 = clear, 0 = no clear)
+                // Bits 2-0: Row count (number of rows, range 0-7)
+                byte subtitleDataByte = (byte)(rows.Count & 0x07);
+                if (clearBit)
+                    subtitleDataByte |= 0x08; // Set bit 3 for CLEAR
+                pkt.Add(subtitleDataByte);
+
+                // Add each row's data: 2-byte row number + 40 bytes of data
+                foreach (var (row, data) in rows)
+                {
+                    // Row number encoded as TWO Hamming 8/4 bytes (tens and units)
+                    pkt.Add(EncodeDigit(row / 10)); // Tens digit
+                    pkt.Add(EncodeDigit(row % 10)); // Units digit
+
+                    // 40 bytes of subtitle data
+                    if (data.Length != 40)
+                        throw new InvalidOperationException(
+                            $"Data must be exactly 40 bytes, got {data.Length}"
+                        );
+                    pkt.AddRange(data);
+                }
+
+                // Write packet
+                stream.Write(pkt.ToArray(), 0, pkt.Count);
+                stream.Flush();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nError writing BUILD packet: {ex.Message}");
+            }
+        }
+
+        // Keep old WritePacket for backwards compatibility but mark obsolete
+        [Obsolete("Use WriteBuildPacket instead")]
         private void WritePacket(string page, byte row, byte[] data, bool clearBit, int totalRows)
         {
             try
@@ -629,8 +675,9 @@ namespace NewforCli
                 pkt.Add(subtitleDataByte);
 
                 // Bytes 3-4: Row number encoded as TWO Hamming 8/4 bytes
-                pkt.Add(EncodeDigit(row / 16)); // High nibble (row/16)
-                pkt.Add(EncodeDigit(row % 16)); // Low nibble (row%16)
+                // Row range is 01-23 DECIMAL, encoded as tens and units digits
+                pkt.Add(EncodeDigit(row / 10)); // Tens digit (e.g., row 23 → 2)
+                pkt.Add(EncodeDigit(row % 10)); // Units digit (e.g., row 23 → 3)
 
                 // Bytes 5-44: Data payload - MUST be exactly 40 bytes
                 if (data.Length != 40)
