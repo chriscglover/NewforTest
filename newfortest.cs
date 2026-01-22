@@ -32,16 +32,17 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "1.5";
+        public const string Version = "2.1";
     }
 
     public static class Wst
     {
 
-        // Softel newfor packet markers (REVISED)
-        public const byte PKT_CLEAR = 0x0E;   // Clear/Control packet type
-        public const byte PKT_DATA = 0x8F;    // Data packet type
-        public const byte PKT_START = 0x15;   // Packet start marker
+        // Newfor protocol packet type codes (per official specification)
+        public const byte PKT_CONNECT = 0x0E; // CONNECT - establishes connection and sets page
+        public const byte PKT_BUILD = 0x0F;   // BUILD - sends subtitle data
+        public const byte PKT_REVEAL = 0x10;  // REVEAL - displays the subtitle
+        public const byte PKT_CLEAR = 0x18;   // CLEAR - clears the subtitle display
 
         // WST control codes
         public const byte StartBox = 0x0B;
@@ -126,7 +127,13 @@ namespace NewforCli
                 var keyInfo = Console.ReadKey(true);
                 var key = keyInfo.Key;
 
-                if (key == ConsoleKey.Q) break;
+                if (key == ConsoleKey.Q)
+                {
+                    // Send DISCONNECT before exiting
+                    client.Disconnect();
+                    Console.WriteLine($"\n{DateTime.Now:HH:mm:ss} | [DISCONNECT SENT]");
+                    break;
+                }
 
                 // 1. Toggle Colors
                 if (Wst.ColorMap.ContainsKey(key))
@@ -206,135 +213,196 @@ namespace NewforCli
         {
             Console.Clear();
             Console.WriteLine("(c) 2026 Christopher Glover");
-            Console.WriteLine("=========================================================");
+            Console.WriteLine("===============================================================");
             Console.WriteLine($" NEWFOR INJECTOR  v{Globals.Version} | Target: {ip}:{port} | Page: {page}");
-            Console.WriteLine("=========================================================");
-            Console.WriteLine(" [COLORS] W:White Y:Yellow G:Green R:Red B:Blue A:Cyan M:Magenta");
-            Console.WriteLine(" [ATTRS]  X:Toggle Box  H:Toggle Double-Height");
-            Console.WriteLine(" [POSITION] T:Top  N:Middle  L:Lower");
-            Console.WriteLine(" [SEND]   1:Single Line 2:Double Line  3:Triple Line");
-            Console.WriteLine(" [ACTION] C:Clear Page  P:Change Page  Q:Quit");
-            Console.WriteLine("---------------------------------------------------------");
+            Console.WriteLine("===============================================================");
+            Console.WriteLine();
+            Console.WriteLine("COLOR SELECTION:");
+            Console.WriteLine("  [R] Red     [G] Green   [Y] Yellow  [B] Blue");
+            Console.WriteLine("  [M] Magenta [A] Cyan    [W] White");
+            Console.WriteLine();
+            Console.WriteLine("OPTIONS:");
+            Console.WriteLine("  [X] Toggle Box    [H] Toggle Double Height");
+            Console.WriteLine();
+            Console.WriteLine("POSITION:");
+            Console.WriteLine("  [T] Top     [N] Middle  [L] Lower (Default)");
+            Console.WriteLine();
+            Console.WriteLine("SUBTITLES:");
+            Console.WriteLine("  [1] Single Line  [2] Two Lines  [3] Three Lines");
+            Console.WriteLine();
+            Console.WriteLine("ACTIONS:");
+            Console.WriteLine("  [C] Clear Screen  [P] Change Page  [Q] Quit");
+            Console.WriteLine();
             UpdateStatusLine();
         }
 
         static void UpdateStatusLine()
         {
-            // Clear current line and write state
-            string boxStatus = _useBox ? "[BOX ON]" : "[BOX OFF]";
-            string heightStatus = _useDouble ? "[DBL HIGH]" : "[NORMAL]";
-            string posStatus = _position switch
+            Console.SetCursorPosition(0, Console.WindowHeight - 1);
+            string boxStatus = _useBox ? "ON" : "OFF";
+            string heightStatus = _useDouble ? "DOUBLE" : "SINGLE";
+            string positionName = _position switch
             {
-                VerticalPosition.Top => "[TOP]",
-                VerticalPosition.Middle => "[MIDDLE]",
-                VerticalPosition.Lower => "[LOWER]",
-                _ => "[LOWER]"
+                VerticalPosition.Top => "TOP",
+                VerticalPosition.Middle => "MIDDLE",
+                VerticalPosition.Lower => "LOWER",
+                _ => "LOWER"
             };
-            Console.Write($"\r CURRENT MODE: {_colorName.PadRight(8)} {boxStatus.PadRight(10)} {heightStatus.PadRight(12)} {posStatus.PadRight(10)} ");
+
+            Console.Write($" Color: {_colorName,-7} | Box: {boxStatus,-3} | Height: {heightStatus,-6} | Position: {positionName,-6} ");
         }
     }
 
-    public class NewforClient : IDisposable
+    /// <summary>
+    /// Newfor Client for subtitle injection.
+    /// Implements the official Newfor Protocol specification.
+    /// 
+    /// Protocol Overview (5 packet types):
+    /// 
+    /// 1. CONNECT (0x0E) - Establishes connection and sets page number
+    ///    Structure: 0x0E 0x00 [magazine_H] [tens_H] [units_H]
+    ///    All page components are Hamming 8/4 encoded
+    /// 
+    /// 2. BUILD (0x0F) - Sends subtitle row data
+    ///    Structure: 0x0F [subtitle_data] [row_hi_H] [row_lo_H] [40 bytes]
+    ///    Subtitle data byte:
+    ///      Bits 7-4: Unused (0000)
+    ///      Bit 3: CLEAR bit (1=clear before display, 0=add to existing)
+    ///      Bits 2-0: Row count (3 bits, NOT Hamming encoded, range 0-7)
+    ///    Row number: 2 bytes, Hamming 8/4 encoded high and low nibbles
+    ///    Data: 40 bytes with odd parity
+    /// 
+    /// 3. REVEAL (0x10) - Displays the subtitle data
+    ///    Structure: 0x10 (single byte)
+    /// 
+    /// 4. CLEAR (0x18) - Clears the subtitle display
+    ///    Structure: 0x18 (single byte)
+    /// 
+    /// 5. DISCONNECT (0x0E) - Terminates session
+    ///    Structure: 0x0E 0x00 0xC7 0xC7 0xC7 (page 999, all nines Hamming encoded)
+    ///    Same as CONNECT but Magazine and Page set to illegal value of 999
+    /// 
+    /// Multi-line Subtitle Workflow:
+    ///   CONNECT → BUILD(row1, clear=1) → BUILD(row2, clear=0) → BUILD(row3, clear=0) → REVEAL
+    /// 
+    /// Session Lifecycle:
+    ///   CONNECT(page) → [BUILD + REVEAL cycles] → DISCONNECT
+    /// </summary>
+    class NewforClient : IDisposable
     {
+        private readonly string _host;
+        private readonly int _port;
         private TcpClient? _tcp;
-        private string _ip;
-        private int _port;
 
-        public NewforClient(string ip, int port) { _ip = ip; _port = port; }
+        public NewforClient(string host, int port)
+        {
+            _host = host;
+            _port = port;
+        }
 
         public bool Connect()
         {
-            try { _tcp = new TcpClient(_ip, _port); return true; }
-            catch { Console.WriteLine($"\nError: Could not connect to: {_ip}"); return false; }
+            try
+            {
+                _tcp = new TcpClient();
+                _tcp.Connect(_host, _port);
+                Console.WriteLine($"Connected to {_host}:{_port}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Connection failed: {ex.Message}");
+                return false;
+            }
         }
 
         /// <summary>
-        /// Sends the burst initialization sequence required before sending data packets.
-        /// Sequence: 0e 15 [MAG] [TENS] [UNITS], 0e 15 15 15 15, 98
-        /// The last three bytes encode the page number in Softel's proprietary format.
+        /// Sends the CONNECT command which establishes connection and sets the page number.
+        /// Per official Newfor spec (page 48):
+        /// Byte 1: 0x0E (PACKET TYPE CODE)
+        /// Byte 2: 0x00 (ZERO)
+        /// Byte 3: Magazine number (Hamming 8/4 encoded)
+        /// Byte 4: Page tens (Hamming 8/4 encoded)
+        /// Byte 5: Page units (Hamming 8/4 encoded)
         /// </summary>
         private void SendBurstStart(string page)
         {
-            if (_tcp == null)
-                throw new InvalidOperationException("TCP client is not connected.");
+            try
+            {
+                if (_tcp == null)
+                    throw new InvalidOperationException("TCP client is not connected.");
 
-            var stream = _tcp.GetStream();
+                var stream = _tcp.GetStream();
 
-            // Encode the page number into Softel format (3 bytes)
-            var pageBytes = EncodePageNumber(page);
+                // Parse page number
+                int pageNum = int.Parse(page);
+                int magazine = (pageNum / 100) % 10;
+                int tens = (pageNum / 10) % 10;
+                int units = pageNum % 10;
 
-            // Start of burst sequence with page number encoding
-            byte[] startBurst = { 0x0E, 0x15, pageBytes[0], pageBytes[1], pageBytes[2] };
-            stream.Write(startBurst, 0, startBurst.Length);
+                // Build CONNECT packet per spec
+                var pkt = new List<byte>
+                {
+                    0x0E,                       // Byte 1: Packet type code
+                    0x00,                       // Byte 2: ZERO
+                    EncodeDigit(magazine),      // Byte 3: Magazine with Hamming 8/4
+                    EncodeDigit(tens),          // Byte 4: Tens with Hamming 8/4
+                    EncodeDigit(units)          // Byte 5: Units with Hamming 8/4
+                };
 
-            // Init confirmation
-            byte[] initConfirm = { 0x0E, 0x15, 0x15, 0x15, 0x15 };
-            stream.Write(initConfirm, 0, initConfirm.Length);
-
-            // Burst marker
-            stream.WriteByte(0x98);
-
-            stream.Flush();
+                stream.Write(pkt.ToArray(), 0, pkt.Count);
+                stream.Flush();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nError sending CONNECT: {ex.Message}");
+            }
         }
 
         /// <summary>
-        /// Encodes the page number for the burst start sequence using Softel's proprietary encoding.
-        /// Returns 3 bytes: [Magazine byte, Tens byte, Units byte]
+        /// Encodes a single hex digit (0-F) using Hamming 8/4 encoding.
+        /// This encoding is used for magazine, tens, and units positions in the Newfor protocol.
         /// 
-        /// Based on packet capture analysis from pages 123, 333, 456, 888, 889:
-        /// The same encoding is used for all three positions (magazine, tens, units).
-        /// Each digit 0-9 maps to a specific byte value.
-        /// </summary>
-        private byte[] EncodePageNumber(string page)
-        {
-            // Parse the page number
-            if (!int.TryParse(page, out int pageNum))
-                return new byte[] { 0xD0, 0xD0, 0xD0 }; // Default to page 888
-
-            // Extract magazine (hundreds) and page digits
-            int magazine = pageNum / 100;
-            // Note: In Softel NEWFOR, magazine 8 is encoded as 0xD0 (digit 8), not converted to 0
-
-            int tens = (pageNum / 10) % 10;
-            int units = pageNum % 10;
-
-            // Use single encoding table for all positions (confirmed via packet captures)
-            byte magazineByte = EncodeDigit(magazine);
-            byte tensByte = EncodeDigit(tens);
-            byte unitsByte = EncodeDigit(units);
-
-            return new byte[] { magazineByte, tensByte, unitsByte };
-        }
-
-        /// <summary>
-        /// Encodes a single digit (0-9) to Softel format.
-        /// This encoding is used consistently for magazine, tens, and units positions.
+        /// Complete Hamming 8/4 encoding table from Teletext specification:
+        /// https://pdc.ro.nu/hamming.html
         /// 
-        /// All mappings confirmed from packet captures:
-        /// Pages 123, 333, 456, 567, 888, 889
+        /// Data nibble -> Hammed byte
+        /// 0 = 0x15, 1 = 0x02, 2 = 0x49, 3 = 0x5E
+        /// 4 = 0x64, 5 = 0x73, 6 = 0x38, 7 = 0x2F
+        /// 8 = 0xD0, 9 = 0xC7, A = 0x8C, B = 0x9B
+        /// C = 0xA1, D = 0xB6, E = 0xFD, F = 0xEA
         /// </summary>
         private byte EncodeDigit(int digit)
         {
             return digit switch
             {
-                0 => 0x15,  // Confirmed: page 100
-                1 => 0x02,  // Confirmed: page 123
-                2 => 0x49,  // Confirmed: page 123
-                3 => 0x5E,  // Confirmed: pages 123, 333
-                4 => 0x64,  // Confirmed: page 456
-                5 => 0x73,  // Confirmed: pages 456, 567
-                6 => 0x38,  // Confirmed: pages 456, 567
-                7 => 0x2F,  // Confirmed: page 567
-                8 => 0xD0,  // Confirmed: pages 888, 889
-                9 => 0xC7,  // Confirmed: page 889
-                _ => 0x15   // Default to 8
+                0x0 => 0x15,  // 0
+                0x1 => 0x02,  // 1
+                0x2 => 0x49,  // 2
+                0x3 => 0x5E,  // 3
+                0x4 => 0x64,  // 4
+                0x5 => 0x73,  // 5
+                0x6 => 0x38,  // 6
+                0x7 => 0x2F,  // 7
+                0x8 => 0xD0,  // 8
+                0x9 => 0xC7,  // 9
+                0xA => 0x8C,  // A
+                0xB => 0x9B,  // B
+                0xC => 0xA1,  // C
+                0xD => 0xB6,  // D
+                0xE => 0xFD,  // E
+                0xF => 0xEA,  // F
+                _ => 0x15     // Default to 0
             };
         }
 
         /// <summary>
         /// Sends subtitle lines to the display.
-        /// CORRECTED: Sends burst start (clear) once at the beginning, then all subtitle lines as a single burst.
-        /// This follows the Softel Newfor Protocol and WST teletext standard.
+        /// FIXED: All lines are sent in a single burst without clearing between them.
+        /// The burst start clears the page once, then all lines are added before the end marker.
+        /// Each row MUST have exactly 40 bytes of data.
+        /// CRITICAL: Clear bit is set ONLY on the first row to clear the screen.
+        ///           Subsequent rows have clear bit OFF so they add to the display without clearing.
         /// </summary>
         public void Send(string page, string[] lines, byte color, bool dh, bool boxed, VerticalPosition position)
         {
@@ -377,14 +445,26 @@ namespace NewforCli
                 foreach (char c in lines[i])
                     data.Add(AddOddParity((byte)c));
 
-                // Padding with 0x8A to match professional format
+                // Padding to exactly 40 bytes - CRITICAL for protocol compliance
                 while (data.Count < 40)
                     data.Add(Wst.Padding);
 
-                WritePacket(page, (byte)(startRow + (i * spacing)), data.ToArray());
+                // Truncate if somehow over 40 bytes (shouldn't happen but safety check)
+                if (data.Count > 40)
+                {
+                    Console.WriteLine($"\nWarning: Row data exceeded 40 bytes ({data.Count}), truncating");
+                    data.RemoveRange(40, data.Count - 40);
+                }
+
+                // CRITICAL: Clear bit is set ONLY on first row (i == 0)
+                // This clears the screen before displaying the first row
+                // Subsequent rows have clear bit OFF so they ADD to the display
+                bool clearBit = (i == 0);
+
+                WritePacket(page, (byte)(startRow + (i * spacing)), data.ToArray(), clearBit, lines.Length);
             }
 
-            // Send end marker to complete the burst
+            // Send end marker AFTER all lines to complete the burst
             SendEndMarker();
         }
 
@@ -408,8 +488,8 @@ namespace NewforCli
         }
 
         /// <summary>
-        /// Clears the display by sending burst start followed immediately by end marker.
-        /// CORRECTED: Now uses proper clear sequence instead of treating init as clear.
+        /// Clears the subtitle display.
+        /// Per official spec (page 49): CLEAR command is a single byte 0x18
         /// </summary>
         public void Clear(string page)
         {
@@ -418,23 +498,64 @@ namespace NewforCli
                 if (_tcp == null)
                     throw new InvalidOperationException("TCP client is not connected.");
 
-                // Send burst start (this initializes/clears the display)
-                SendBurstStart(page);
+                var stream = _tcp.GetStream();
 
-                // Immediately send end marker (no data packets = clear screen)
-                SendEndMarker();
+                // Send CLEAR command (0x18)
+                stream.WriteByte(0x18);
+                stream.Flush();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"\nError clearing page: {ex.Message}");
+                Console.WriteLine($"\nError clearing display: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Writes a data packet with the correct Newfor protocol structure.
-        /// Structure: 8f c7 02 [row with parity] [40 bytes data]
+        /// Sends DISCONNECT command to terminate the subtitle session.
+        /// Per official spec (page 49): Same as CONNECT but with page 999 (illegal value)
+        /// Structure: 0x0E 0x00 [mag=9] [tens=9] [units=9]
         /// </summary>
-        private void WritePacket(string page, byte row, byte[] data)
+        public void Disconnect()
+        {
+            try
+            {
+                if (_tcp == null)
+                    return; // Already disconnected
+
+                var stream = _tcp.GetStream();
+
+                // Build DISCONNECT packet (CONNECT with page 999)
+                var pkt = new List<byte>
+                {
+                    0x0E,                       // Byte 1: Packet type code
+                    0x00,                       // Byte 2: ZERO
+                    EncodeDigit(9),             // Byte 3: Magazine = 9 (illegal)
+                    EncodeDigit(9),             // Byte 4: Tens = 9
+                    EncodeDigit(9)              // Byte 5: Units = 9
+                };
+
+                stream.Write(pkt.ToArray(), 0, pkt.Count);
+                stream.Flush();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nError sending DISCONNECT: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Writes a data packet with the correct Newfor protocol structure per official spec.
+        /// 
+        /// BUILD Packet Structure:
+        /// Byte 1: 0x0F (PACKET TYPE CODE for BUILD)
+        /// Byte 2: SUBTITLE DATA byte
+        ///   - Bits 7-4: Unused (set to 0)
+        ///   - Bit 3: CLEAR bit (1 = clear screen, 0 = don't clear)
+        ///   - Bits 2-0: Row count (3 bits, NOT Hamming encoded, range 0-7)
+        /// Bytes 3-4: Row number (2 bytes, Hamming 8/4 encoded high and low nibbles)
+        /// Bytes 5-44: Subtitle data (40 bytes, odd parity)
+        /// </summary>
+        private void WritePacket(string page, byte row, byte[] data, bool clearBit, int totalRows)
         {
             try
             {
@@ -444,19 +565,26 @@ namespace NewforCli
                 var stream = _tcp.GetStream();
                 var pkt = new List<byte>();
 
-                // Data packet header (observed from professional capture)
-                pkt.Add(Wst.PKT_DATA);  // 0x8F
+                // Byte 1: Packet type code for BUILD command
+                pkt.Add(0x0F);
 
-                // Second byte - consistently 0xC7 in professional captures
-                pkt.Add(0xC7);
+                // Byte 2: SUBTITLE DATA byte
+                // Bits 7-4: unused (0000)
+                // Bit 3: CLEAR bit (1 = clear, 0 = no clear)
+                // Bits 2-0: Row count (3 bits, range 0-7)
+                byte subtitleDataByte = (byte)(totalRows & 0x07);  // Row count in lower 3 bits
+                if (clearBit)
+                    subtitleDataByte |= 0x08;  // Set bit 3 for CLEAR
+                pkt.Add(subtitleDataByte);
 
-                // Third byte - consistently 0x02 in professional captures
-                pkt.Add(0x02);
+                // Bytes 3-4: Row number encoded as TWO Hamming 8/4 bytes
+                pkt.Add(EncodeDigit(row / 16));  // High nibble (row/16)
+                pkt.Add(EncodeDigit(row % 16));  // Low nibble (row%16)
 
-                // Row number with parity
-                pkt.Add(AddOddParity(row));
+                // Bytes 5-44: Data payload - MUST be exactly 40 bytes
+                if (data.Length != 40)
+                    throw new InvalidOperationException($"Data must be exactly 40 bytes, got {data.Length}");
 
-                // Data payload (already has parity and padding)
                 pkt.AddRange(data);
 
                 // Write packet
@@ -471,7 +599,8 @@ namespace NewforCli
 
         /// <summary>
         /// Sends the end-of-burst marker (0x10).
-        /// This signals the end of a transmission burst.
+        /// This signals the end of a transmission burst and triggers display of all sent lines.
+        /// CRITICAL: This must be sent AFTER all subtitle lines, not between them.
         /// </summary>
         private void SendEndMarker()
         {
