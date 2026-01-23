@@ -32,7 +32,7 @@ namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "3.0";
+        public const string Version = "3.1";
     }
 
     public static class Wst
@@ -46,6 +46,7 @@ namespace NewforCli
         // WST control codes
         public const byte StartBox = 0x0B;
         public const byte EndBox = 0x0A;
+        public const byte NormalHeight = 0x0C;
         public const byte DoubleHeight = 0x0D;
         public const byte Space = 0x20;
         public const byte Padding = 0xA0; // Space (0x20) with odd parity bit set
@@ -77,7 +78,7 @@ namespace NewforCli
         static byte _currentColor = 0x07; // White
         static string _colorName = "White";
         static bool _useBox = true;
-        static bool _useDouble = true;
+        static bool _useDouble = false;
         static VerticalPosition _position = VerticalPosition.Lower;
 
         static void Main(string[] args)
@@ -153,11 +154,11 @@ namespace NewforCli
                     UpdateStatusLine();
                 }
                 // 3. Toggle Height
-                //else if (key == ConsoleKey.H)
-                //{
-                //    _useDouble = !_useDouble;
-                //    UpdateStatusLine();
-                //}
+                else if (key == ConsoleKey.H)
+                {
+                    _useDouble = !_useDouble;
+                    UpdateStatusLine();
+                }
                 // 4. Position Control
                 else if (key == ConsoleKey.T)
                 {
@@ -256,7 +257,6 @@ namespace NewforCli
             Console.WriteLine("  [M] Magenta [A] Cyan    [W] White");
             Console.WriteLine();
             Console.WriteLine("OPTIONS:");
-            //Console.WriteLine("  [X] Toggle Box [H] Toggle Double Height");
             Console.WriteLine("  [X] Toggle Box [H] Toggle Double Height");
             Console.WriteLine();
             Console.WriteLine("POSITION:");
@@ -468,11 +468,16 @@ namespace NewforCli
             {
                 var data = new List<byte>();
 
-                // Double height control code - ALWAYS added at start of line
-                // Some receivers require this even for "single height" display
-                // When dh=false, the receiver may still need the code but will 
-                // display at normal height if the row below has content
-                data.Add(AddOddParity(Wst.DoubleHeight));
+                // Height control code - MUST come first
+                // 0x0C = Normal/Single height, 0x0D = Double height
+                if (dh)
+                {
+                    data.Add(AddOddParity(Wst.DoubleHeight));
+                }
+                else
+                {
+                    data.Add(AddOddParity(Wst.NormalHeight));
+                }
                 data.Add(AddOddParity(Wst.Space));
 
                 // Add leading spaces (professional format has spaces before box)
