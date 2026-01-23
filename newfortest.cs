@@ -26,22 +26,21 @@ SOFTWARE.
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
-using System.Text;
 
 namespace NewforCli
 {
     public static class Globals
     {
-        public const string Version = "3.1";
+        public const string Version = "3.4";
     }
 
     public static class Wst
     {
         // Newfor protocol packet type codes (per official specification)
         public const byte PKT_CONNECT = 0x0E; // CONNECT - establishes connection and sets page
-        public const byte PKT_BUILD = 0x0F; // BUILD - sends subtitle data
-        public const byte PKT_REVEAL = 0x10; // REVEAL - displays the subtitle
-        public const byte PKT_CLEAR = 0x18; // CLEAR - clears the subtitle display
+        public const byte PKT_BUILD = 0x8F;   // BUILD - sends subtitle data (0x0F with odd parity)
+        public const byte PKT_REVEAL = 0x10;  // REVEAL - displays the subtitle
+        public const byte PKT_CLEAR = 0x98;   // CLEAR - clears the subtitle display (0x18 with odd parity)
 
         // WST control codes
         public const byte StartBox = 0x0B;
@@ -205,7 +204,10 @@ namespace NewforCli
                 {
                     client.Send(
                         page,
-                        new[] { "THIS IS A SINGLE LINE" },
+                        new[]
+                        {
+                            "THIS IS A SINGLE LINE"
+                        },
                         _currentColor,
                         _useDouble,
                         _useBox,
@@ -216,7 +218,11 @@ namespace NewforCli
                 {
                     client.Send(
                         page,
-                        new[] { "THIS IS LINE ONE", "THIS IS LINE TWO" },
+                        new[]
+                        {
+                           "THIS IS LINE ONE",
+                           "THIS IS LINE TWO"
+                        },
                         _currentColor,
                         _useDouble,
                         _useBox,
@@ -275,7 +281,7 @@ namespace NewforCli
         {
             Console.SetCursorPosition(0, Console.WindowHeight - 1);
             string boxStatus = _useBox ? "ON" : "OFF";
-            //string heightStatus = _useDouble ? "DOUBLE" : "SINGLE";
+            string heightStatus = _useDouble ? "DOUBLE" : "SINGLE";
             string positionName = _position switch
             {
                 VerticalPosition.Top => "TOP",
@@ -381,7 +387,7 @@ namespace NewforCli
                 // Build CONNECT packet per spec
                 var pkt = new List<byte>
                 {
-                    0x0E, // Byte 1: Packet type code
+                    Wst.PKT_CONNECT, // Byte 1: Packet type code
                     0x00, // Byte 2: ZERO
                     EncodeDigit(magazine), // Byte 3: Magazine with Hamming 8/4
                     EncodeDigit(tens), // Byte 4: Tens with Hamming 8/4
@@ -457,7 +463,9 @@ namespace NewforCli
             // Send CLEAR command before BUILD (matching FAB sequence)
             Clear(page);
 
-            int spacing = dh ? 2 : 1;
+            // Always use spacing of 2 rows between subtitle lines
+            // This leaves an empty row between each line for better readability
+            int spacing = 2;
             int startRow = CalculateStartRow(lines.Length, position, spacing);
 
             // Build all row data first
@@ -575,8 +583,8 @@ namespace NewforCli
 
                 var stream = _tcp.GetStream();
 
-                // Send CLEAR command (0x18 with odd parity = 0x98)
-                stream.WriteByte(0x98);
+                // Send CLEAR command
+                stream.WriteByte(Wst.PKT_CLEAR);
                 stream.Flush();
             }
             catch (Exception ex)
@@ -602,7 +610,7 @@ namespace NewforCli
                 // Build DISCONNECT packet (CONNECT with page 999)
                 var pkt = new List<byte>
                 {
-                    0x0E, // Byte 1: Packet type code
+                    Wst.PKT_CONNECT, // Byte 1: Packet type code
                     0x00, // Byte 2: ZERO
                     EncodeDigit(9), // Byte 3: Magazine = 9 (illegal)
                     EncodeDigit(9), // Byte 4: Tens = 9
@@ -640,9 +648,8 @@ namespace NewforCli
                 var stream = _tcp.GetStream();
                 var pkt = new List<byte>();
 
-                // Byte 1: Packet type code for BUILD command with odd parity
-                // FAB sends 0x8F which is 0x0F with parity bit set
-                pkt.Add(0x8F);
+                // Byte 1: Packet type code for BUILD command
+                pkt.Add(Wst.PKT_BUILD);
 
                 // Byte 2: SUBTITLE DATA byte - Hamming encoded
                 // Bit 3: CLEAR bit (1 = clear, 0 = no clear)
@@ -681,52 +688,6 @@ namespace NewforCli
             }
         }
 
-        // Keep old WritePacket for backwards compatibility but mark obsolete
-        [Obsolete("Use WriteBuildPacket instead")]
-        private void WritePacket(string page, byte row, byte[] data, bool clearBit, int totalRows)
-        {
-            try
-            {
-                if (_tcp == null)
-                    throw new InvalidOperationException("TCP client is not connected.");
-
-                var stream = _tcp.GetStream();
-                var pkt = new List<byte>();
-
-                // Byte 1: Packet type code for BUILD command with parity
-                pkt.Add(0x8F);
-
-                // Byte 2: SUBTITLE DATA byte - Hamming encoded
-                // Bit 3: CLEAR bit (1 = clear, 0 = no clear)
-                // Bits 2-0: Row count (3 bits, range 0-7)
-                byte subtitleDataValue = (byte)(totalRows & 0x07);
-                if (clearBit)
-                    subtitleDataValue |= 0x08; // Set bit 3 for CLEAR
-                pkt.Add(EncodeDigit(subtitleDataValue));
-
-                // Bytes 3-4: Row number encoded as TWO Hamming 8/4 bytes (hex nibbles)
-                // High nibble first, low nibble second
-                pkt.Add(EncodeDigit(row >> 4));   // High nibble
-                pkt.Add(EncodeDigit(row & 0x0F)); // Low nibble
-
-                // Bytes 5-44: Data payload - MUST be exactly 40 bytes
-                if (data.Length != 40)
-                    throw new InvalidOperationException(
-                        $"Data must be exactly 40 bytes, got {data.Length}"
-                    );
-
-                pkt.AddRange(data);
-
-                // Write packet
-                stream.Write(pkt.ToArray(), 0, pkt.Count);
-                stream.Flush();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"\nError writing packet: {ex.Message}");
-            }
-        }
-
         /// <summary>
         /// Sends the end-of-burst marker (0x10).
         /// This signals the end of a transmission burst and triggers display of all sent lines.
@@ -741,8 +702,8 @@ namespace NewforCli
 
                 var stream = _tcp.GetStream();
 
-                // Send end-of-transmission marker
-                stream.WriteByte(0x10);
+                // Send REVEAL command to display the subtitle
+                stream.WriteByte(Wst.PKT_REVEAL);
                 stream.Flush();
             }
             catch (Exception ex)
