@@ -285,8 +285,7 @@ namespace NewforCli
             };
 
             Console.Write(
-                // $" Color: {_colorName,-7} | Box: {boxStatus,-3} | Height: {heightStatus,-6} | Position: {positionName,-6} "
-                $" Color: {_colorName,-7} | Box: {boxStatus,-3} | Position: {positionName,-6} "
+                $" Color: {_colorName,-7} | Box: {boxStatus,-3} | Height: {heightStatus,-6} | Position: {positionName,-6} "
             );
         }
     }
