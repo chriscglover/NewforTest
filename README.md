@@ -70,9 +70,9 @@ The window has the connection bar along the top, the preview, file controls and 
 |------|--------------|
 | **Connection bar** | Inserter address, port and page. The page is checked as you type (magazine 1–8, e.g. `888` or `1FF`); an invalid page blocks sending. **Connect** / **Disconnect**, and the connection status. |
 | **Preview** | Draws what the inserter has been sent, decoded from the actual bytes, over a grey picture. Shows boxes, colours, double height, row numbers and the page. Only boxed cells get a background, as on a subtitle decoder. |
-| **Colour / Style** | Text colour, box, double height, position (top, middle, lower), justification (left, centre, right) and character set. Changes apply to the next subtitle sent, including during file playback. |
+| **Colour / Style** | Text colour, box, box colour (black by default), double height, position (top, middle, lower), justification (left, centre, right) and character set. Changes apply to the next subtitle sent, including during file playback. |
 | **Test subtitles** | The built-in 1, 2 and 3 line subtitles, and **Clear**. |
-| **Custom text** | One subtitle line per text line. Checked as you type against the line limit (34 characters boxed, 38 unboxed). |
+| **Custom text** | One subtitle line per text line. Checked as you type against the line limit (34 characters boxed, 32 with a coloured box, 38 unboxed). |
 | **Soak test** | Cycles the 1, 2 and 3 line test subtitles every *N* seconds until stopped. |
 | **File** | Open or drop `.srt` / `.stl`. **Play/Pause**, **Stop** (clears the screen), **Prev** / **Next** cue, **Loop**, **Follow** (keep the cue on screen selected), and the timecode. Cues that can't be shown with the current style are orange; hover for the reason. Double-click a cue to go to it. |
 | **Log** | Everything sent, file warnings and errors. **Hex dump** adds each packet, decoded (e.g. `BUILD row 22, clear screen` and the row's text with control codes) and as hex. **Copy** puts the log on the clipboard. |
@@ -102,6 +102,7 @@ Run `NewforTest` with no mode option for the keyboard-driven console. The screen
 | R G Y B M A W | Red, green, yellow, blue, magenta, cyan (A), white |
 | **Style** | |
 | X | Box on/off |
+| Z | Box colour (cycles; black by default) |
 | H | Double height on/off |
 | J | Justification: left → centre → right |
 | I | Character set (cycles through the national options) |
@@ -148,6 +149,8 @@ Style:
   --color <colour>         red, green, yellow, blue, magenta, cyan, white (default white)
   --double                 Double height
   --no-box                 No box
+  --box-color <colour>     Box background: black, red, green, yellow, blue, magenta,
+                           cyan, white (default black; others allow 32 characters a line)
   --pos <position>         top, middle or lower (default lower)
   --justify <justify>      left, centre or right (default left)
   --charset <set>          english, french, german, italian, portuguese, swedish
@@ -241,8 +244,10 @@ Row 22 is the lowest row used: a double-height line there also fills row 23, and
 ### Row layout
 
 ```
-[height] [spaces] [colour] [Start Box][Start Box] text [End Box][End Box] [padding]
+[height] [spaces] ([box colour][New Background]) [colour] [Start Box][Start Box] text [End Box][End Box] [padding]
 ```
+
+A **box colour** other than black is set with New Background, which makes the current text colour the background colour. So the box colour is sent as a colour code first, then New Background, then the text colour. Black, the default, needs no codes.
 
 Start Box and End Box both take effect *after* their own cell, so the box shows **one cell of margin** each side of the text. The spaces set the justification:
 
@@ -252,7 +257,7 @@ Start Box and End Box both take effect *after* their own cell, so the box shows 
 | **Centre** | box centred on the row | text centred |
 | **Right** | box against the right edge (End Box in columns 38–39) | text ends in column 39 |
 
-At most **34 characters** fit on a boxed row and **38** unboxed. A colour change within a line takes one cell, reusing an adjacent space where there is one. Text that doesn't fit is rejected with a clear message rather than cut off.
+At most **34 characters** fit on a boxed row (**32** with a coloured box) and **38** unboxed. A colour change within a line takes one cell, reusing an adjacent space where there is one. Text that doesn't fit is rejected with a clear message rather than cut off.
 
 ---
 
@@ -309,6 +314,7 @@ As FAB Subtitler does: **CONNECT** → **CLEAR** → one **BUILD** per row (the 
 | `0x0B` | Start Box (sent twice) |
 | `0x0C` | Normal height |
 | `0x0D` | Double height |
+| `0x1D` | New background: the current text colour becomes the background (used for box colours) |
 
 EBU STL files may also use others (flash, steady, new background, black background); these are sent as authored, and the preview shows them.
 
@@ -372,6 +378,7 @@ tests/
     - one cell of box margin each side;
     - up to 34 characters per boxed row (38 unboxed);
     - colour changes within a line.
+  - **Box colour** (black by default).
   - **Teletext national character sets.** Typographic characters are converted.
   - **Hex dump** with packet decoding. Custom text.
   - **Robustness:**

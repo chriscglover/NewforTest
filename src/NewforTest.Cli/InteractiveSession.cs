@@ -136,6 +136,12 @@ internal sealed class InteractiveSession
             case ConsoleKey.X:
                 SetStyle(_style with { Boxed = !_style.Boxed });
                 break;
+            case ConsoleKey.Z:
+                var boxColors = Enum.GetValues<TeletextColor>();
+                SetStyle(_style with { BoxColor = boxColors[(Array.IndexOf(boxColors, _style.BoxColor) + 1) % boxColors.Length] });
+                if (!_style.Boxed)
+                    Log("Box colour only applies with the box on ([X]).");
+                break;
             case ConsoleKey.H:
                 SetStyle(_style with { DoubleHeight = !_style.DoubleHeight });
                 break;
@@ -298,7 +304,7 @@ internal sealed class InteractiveSession
     {
         while (true)
         {
-            int max = SubtitleRowBuilder.MaxTextLength(_style.Boxed);
+            int max = SubtitleRowBuilder.MaxTextLength(_style);
             string? input = PromptLine($" Text ({SubtitleText.LineSeparator} = new line, max {max}): ");
 
             if (string.IsNullOrWhiteSpace(input))
@@ -557,14 +563,14 @@ internal sealed class InteractiveSession
             $" Target: {_client.Host}:{_client.Port} [{connection}]  |  Page: {_page}  |  Charset: {_style.CharacterSet}",
             new string('=', 78),
             " COLOR     [R]ed [G]reen [Y]ellow [B]lue [M]agenta [A] Cyan [W]hite",
-            " STYLE     [X] Box  [H] Double height  [J] Justify  [I] Charset",
-            " POSITION  [T]op  [N] Middle  [L]ower",
+            " STYLE     [X] Box  [Z] Box colour  [H] Double height  [J] Justify",
+            " POSITION  [T]op  [N] Middle  [L]ower    [I] Character set",
             " SEND      [1] [2] [3] Test lines  [E] Enter text  [4] Resend  [C] Clear",
             " FILE      [F] Load  [Space] Play/Pause  [S] Stop  [<] [>] Prev/Next cue",
             "           [G] Go to  [K] Loop  [U] Soak test",
             " OTHER     [P] Page  [O] Reconnect  [V] Hex dump  [Q] Quit",
             new string('-', 78),
-            $" Color: {_style.Color,-7}  Box: {(_style.Boxed ? "ON" : "OFF"),-3}  " +
+            $" Color: {_style.Color,-7}  Box: {(_style.Boxed ? _style.BoxColor.ToString().ToUpperInvariant() : "OFF"),-7}  " +
             $"Height: {(_style.DoubleHeight ? "DOUBLE" : "SINGLE"),-6}  " +
             $"Pos: {_style.Position.ToString().ToUpperInvariant(),-6}  " +
             $"Justify: {_style.Justification.ToString().ToUpperInvariant(),-6}  Hex: {(_hexDump ? "ON" : "OFF")}",
@@ -616,7 +622,7 @@ internal sealed class InteractiveSession
     }
 
     private static string Describe(SubtitleStyle style) =>
-        $"{style.Color}, {(style.Boxed ? "boxed" : "unboxed")}, " +
+        $"{style.Color}, {(style.Boxed ? $"{style.BoxColor.ToString().ToLowerInvariant()} box" : "unboxed")}, " +
         $"{(style.DoubleHeight ? "double" : "single")} height, {style.Position.ToString().ToLowerInvariant()}, " +
         $"{style.Justification.ToString().ToLowerInvariant()}";
 }

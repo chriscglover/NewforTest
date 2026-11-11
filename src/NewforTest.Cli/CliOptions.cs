@@ -65,6 +65,7 @@ internal sealed record CliOptions
     {
         "--ip", "--host", "--port", "--page", "--color", "--colour", "--pos", "--position",
         "--justify", "--charset", "--send", "--play", "--load", "--start", "--soak", "--hold",
+        "--box-color", "--box-colour",
     };
 
     public static bool TryParse(
@@ -137,12 +138,21 @@ internal sealed record CliOptions
                     break;
 
                 case "--color" or "--colour":
-                    if (!TryParseColor(value, out var color))
+                    if (!TryParseColor(value, out var color) || color == TeletextColor.Black)
                     {
-                        error = $"'{value}' is not a colour: use {string.Join(", ", Enum.GetNames<TeletextColor>()).ToLowerInvariant()}.";
+                        error = $"'{value}' is not a text colour: use {ColorNames(includeBlack: false)}.";
                         return false;
                     }
                     o = o with { Style = o.Style with { Color = color } };
+                    break;
+
+                case "--box-color" or "--box-colour":
+                    if (!TryParseColor(value, out var boxColor))
+                    {
+                        error = $"'{value}' is not a box colour: use {ColorNames(includeBlack: true)}.";
+                        return false;
+                    }
+                    o = o with { Style = o.Style with { BoxColor = boxColor } };
                     break;
 
                 case "--pos" or "--position":
@@ -268,6 +278,11 @@ internal sealed record CliOptions
     private static bool TryParseColor(string value, out TeletextColor color) =>
         Enum.TryParse(value, ignoreCase: true, out color) && Enum.IsDefined(color) && !int.TryParse(value, out _);
 
+    private static string ColorNames(bool includeBlack) =>
+        string.Join(", ", Enum.GetValues<TeletextColor>()
+            .Where(c => includeBlack || c != TeletextColor.Black)
+            .Select(c => c.ToString().ToLowerInvariant()));
+
     public static bool TryParsePort(string? text, out int port, [NotNullWhen(false)] out string? error)
     {
         if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out port) && port is >= 1 and <= 65535)
@@ -295,6 +310,8 @@ internal sealed record CliOptions
         w.WriteLine("  --color <colour>         red, green, yellow, blue, magenta, cyan, white (default white)");
         w.WriteLine("  --double                 Double height");
         w.WriteLine("  --no-box                 No box");
+        w.WriteLine("  --box-color <colour>     Box background: black, red, green, yellow, blue, magenta,");
+        w.WriteLine("                           cyan, white (default black; others allow 32 characters a line)");
         w.WriteLine("  --pos <position>         top, middle or lower (default lower)");
         w.WriteLine("  --justify <justify>      left, centre or right (default left)");
         w.WriteLine($"  --charset <set>          {string.Join(", ", TeletextCharacterSet.All.Select(s => s.Name.Split('/')[0].ToLowerInvariant()))}");

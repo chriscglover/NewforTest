@@ -23,6 +23,7 @@ public sealed record GuiSettings
     public string Page { get; init; } = "888";
     public TeletextColor Color { get; init; } = TeletextColor.White;
     public bool Boxed { get; init; } = true;
+    public TeletextColor BoxColor { get; init; } = TeletextColor.Black;
     public bool DoubleHeight { get; init; }
     public VerticalPosition Position { get; init; } = VerticalPosition.Lower;
     public Justification Justification { get; init; } = Justification.Left;

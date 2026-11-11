@@ -36,4 +36,13 @@ public sealed record SubtitleStyle(
 {
     /// <summary>Must match the national option the inserter uses for the page.</summary>
     public TeletextCharacterSet CharacterSet { get; init; } = TeletextCharacterSet.English;
+
+    /// <summary>
+    /// Background colour inside the box (boxed subtitles only). Black needs no extra codes;
+    /// any other colour costs two cells, so at most 32 characters fit instead of 34.
+    /// </summary>
+    public TeletextColor BoxColor { get; init; } = TeletextColor.Black;
+
+    /// <summary>True if the box has a background colour other than the default black.</summary>
+    public bool HasColouredBox => Boxed && BoxColor != TeletextColor.Black;
 }

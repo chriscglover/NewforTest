@@ -102,6 +102,27 @@ public sealed class MainWindowTests
     }
 
     [AvaloniaFact]
+    public void Box_colour_shows_in_the_preview_and_shortens_the_line_limit()
+    {
+        var (vm, window) = Open();
+        Assert.Equal(TeletextColor.Black, vm.SelectedBoxColor.Color); // default
+
+        vm.SelectedBoxColor = vm.BoxColors.Single(c => c.Color == TeletextColor.Blue);
+        vm.SendTestCommand.Execute("1");
+        Dispatcher.UIThread.RunJobs();
+
+        var t = vm.Screen.Render()[22].First(c => c.Char == 'T');
+        Assert.True(t.Boxed);
+        Assert.Equal((byte)TeletextColor.Blue, t.Background);
+
+        vm.CustomText = "";
+        Assert.Contains("32 characters", vm.CustomTextInfo);
+
+        window.Close();
+        vm.Dispose();
+    }
+
+    [AvaloniaFact]
     public void Custom_text_is_checked_as_it_is_typed()
     {
         var (vm, window) = Open();
