@@ -43,7 +43,7 @@ public static class SubtitleRowBuilder
         [NotNullWhen(false)] out string? error)
     {
         return line.Raw is not null
-            ? TryBuildRaw(line.Raw, line.Justification, out row, out error)
+            ? TryBuildRaw(line.Raw, line.Justification, style, out row, out error)
             : TryBuildText(line, style, out row, out error);
     }
 
@@ -152,45 +152,69 @@ public static class SubtitleRowBuilder
         return true;
     }
 
+    /// <summary>
+    /// The cells of a raw line: exact codes as they are, text encoded with the style's
+    /// character set (which may expand a character, e.g. an ellipsis to three dots).
+    /// </summary>
+    public static byte[] EncodeRaw(string raw, SubtitleStyle style, ICollection<char>? unsupported = null)
+    {
+        var cells = new List<byte>(raw.Length);
+        foreach (char c in raw)
+        {
+            if (SubtitleLine.IsExactCode(c))
+                cells.Add((byte)(c - SubtitleLine.ExactCodeBase));
+            else
+                cells.AddRange(style.CharacterSet.Encode(c.ToString(), unsupported));
+        }
+        return cells.ToArray();
+    }
+
     private static bool TryBuildRaw(
-        byte[] codes,
+        string raw,
         Justification? justification,
+        SubtitleStyle style,
         [NotNullWhen(true)] out byte[]? row,
         [NotNullWhen(false)] out string? error)
     {
-        IEnumerable<byte> content = codes;
-        int leading = 0;
+        byte[] cells = EncodeRaw(raw, style);
+        List<byte> bytes;
 
-        if (justification is not null)
+        int firstText = Array.FindIndex(cells, b => b > Teletext.Space);
+        if (justification is null || firstText < 0)
         {
-            // Re-justify: drop the authored spacing at both ends, then position the content
-            int first = Array.FindIndex(codes, b => b != Teletext.Space);
-            int last = Array.FindLastIndex(codes, b => b != Teletext.Space);
-            content = first < 0 ? Array.Empty<byte>() : codes[first..(last + 1)];
-            int length = content.Count();
+            // As authored
+            bytes = cells.ToList();
+        }
+        else
+        {
+            // Re-justify the visible text. Control codes around it keep their order and stay next
+            // to the text; the authored spacing at both ends is dropped.
+            int lastText = Array.FindLastIndex(cells, b => b > Teletext.Space);
+            var lead = cells[..firstText].Where(b => b < Teletext.Space).ToList();
+            var trail = cells[(lastText + 1)..].Where(b => b < Teletext.Space).ToList();
+            var text = cells[firstText..(lastText + 1)];
 
-            leading = justification switch
+            int textStart = justification switch
             {
-                Justification.Centre => (Teletext.RowLength - length) / 2,
-                Justification.Right => Teletext.RowLength - 2 - length,
-                _ => 2,
+                Justification.Centre => (Teletext.RowLength - text.Length) / 2,
+                Justification.Right => Teletext.RowLength - 1 - trail.Count - text.Length,
+                _ => lead.Count + 1,
             };
-            leading = Math.Clamp(leading, 0, Math.Max(0, Teletext.RowLength - length));
+            textStart = Math.Clamp(textStart, lead.Count, Math.Max(lead.Count, Teletext.RowLength - trail.Count - text.Length));
+
+            bytes = Enumerable.Repeat(Teletext.Space, textStart - lead.Count)
+                .Concat(lead).Concat(text).Concat(trail).ToList();
         }
 
-        var bytes = Enumerable.Repeat(Teletext.Space, leading).Concat(content).ToList();
+        // Trailing spaces beyond column 40 are harmless; anything else is an authoring error
+        while (bytes.Count > Teletext.RowLength && bytes[^1] == Teletext.Space)
+            bytes.RemoveAt(bytes.Count - 1);
+
         if (bytes.Count > Teletext.RowLength)
         {
-            // Trailing spaces beyond column 40 are harmless; anything else is an authoring error
-            while (bytes.Count > Teletext.RowLength && bytes[^1] == Teletext.Space)
-                bytes.RemoveAt(bytes.Count - 1);
-
-            if (bytes.Count > Teletext.RowLength)
-            {
-                row = null;
-                error = $"Row is {bytes.Count} bytes; a teletext row holds {Teletext.RowLength}.";
-                return false;
-            }
+            row = null;
+            error = $"Row is {bytes.Count} characters including control codes; a teletext row holds {Teletext.RowLength}.";
+            return false;
         }
 
         row = Finish(bytes);

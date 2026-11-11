@@ -247,7 +247,7 @@ public class RowLayoutTests
 
         var tooLong = SubtitleLine.FromRaw(Enumerable.Repeat((byte)'X', 41).ToArray());
         Assert.False(SubtitleRowBuilder.TryBuild(tooLong, new SubtitleStyle(), out _, out var error));
-        Assert.Contains("41 bytes", error);
+        Assert.Contains("41 characters", error);
     }
 }
 
