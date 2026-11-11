@@ -17,7 +17,7 @@ Version 4.0. MIT licensed.
 
 ## Contents
 
-- [Getting started](#getting-started)
+- [Getting started](#getting-started) (including [Linux](#linux))
 - [The GUI](#the-gui)
 - [The console app](#the-console-app)
 - [Scripted use](#scripted-use)
@@ -37,11 +37,11 @@ Version 4.0. MIT licensed.
 
 ### Requirements
 
-- **Running:** the released Windows x64 exes are self-contained single files, so no .NET install is needed.
+- **Running:** the released Windows x64 exes are self-contained single files, so no .NET install is needed. On Linux, build from source (see [Linux](#linux)).
 - **Building:** the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 - **A Newfor inserter** on the network, and the teletext subtitle page it carries (usually **888**).
 
-The GUI uses [Avalonia](https://avaloniaui.net/), so it can also be built for Linux and macOS. Only Windows has been tested.
+The GUI uses [Avalonia](https://avaloniaui.net/), so it also builds for Linux and macOS. Windows and Linux have been tested; macOS has not.
 
 ### Quick start
 
@@ -59,6 +59,26 @@ NewforTest --ip 10.0.0.5 --page 888
 ```
 
 opens the console. Anything not given on the command line is prompted for.
+
+### Linux
+
+Tested on Ubuntu 26.04 (x64) with the .NET 10 SDK:
+- The solution builds and every test passes.
+- The console app's scripted modes and file playback were run against a live inserter.
+- The GUI starts and draws.
+
+Build, then run from the build output:
+
+```
+dotnet build NewforTest.sln -c Release
+dotnet src/NewforTest.Cli/bin/Release/net10.0/NewforTest.dll --ip 10.0.0.5 --page 888
+dotnet src/NewforTest.Gui/bin/Release/net10.0/NewforTestGui.dll
+```
+
+To publish self-contained single files that run without .NET installed, see [Building, testing and publishing](#building-testing-and-publishing).
+
+- **The GUI needs a desktop.** On a headless machine it runs under `xvfb-run`.
+- **Scripted modes need no terminal**, so they suit cron jobs and CI.
 
 ---
 
@@ -88,7 +108,7 @@ The window has the connection bar along the top, the preview, file controls and 
 | F9 | Clear the screen |
 | Ctrl+Enter | Send custom text (in the text box) |
 
-Settings (address, page, style, custom text and so on) are remembered between runs in `%AppData%\NewforTest\gui-settings.json`.
+Settings (address, page, style, custom text and so on) are remembered between runs in `%AppData%\NewforTest\gui-settings.json` (on Linux, `~/.config/NewforTest/gui-settings.json`).
 
 ---
 
@@ -327,7 +347,7 @@ dotnet build NewforTest.sln
 dotnet test NewforTest.sln
 ```
 
-The tests (311) cover:
+The 319 tests (308 core and protocol, 11 GUI) cover:
 - Hamming and parity encoding, and packet framing.
 - Complete byte sequences for known subtitles ("golden" tests). These fail if anything sent on the wire changes.
 - Row layout and justification.
@@ -342,6 +362,15 @@ The tests (311) cover:
 dotnet publish src/NewforTest.Cli -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded -o <folder>
 dotnet publish src/NewforTest.Gui -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded -o <folder>
 ```
+
+**Self-contained single files for Linux** (x64, no .NET needed to run):
+
+```
+dotnet publish src/NewforTest.Cli -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded -o <folder>
+dotnet publish src/NewforTest.Gui -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded -o <folder>
+```
+
+This gives `NewforTest` (about 74 MB) and `NewforTestGui` (about 95 MB). On first run, a single file unpacks its native libraries under `~/.net`, so `HOME` must point at a writable folder.
 
 The version is set once, in `<Version>` in [Directory.Build.props](Directory.Build.props). Both apps and the exe file properties report it, and a test checks they agree.
 
