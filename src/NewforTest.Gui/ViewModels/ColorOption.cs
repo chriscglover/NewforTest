@@ -19,5 +19,9 @@ public sealed record ColorOption(TeletextColor Color, IBrush Brush)
         new ColorOption(TeletextColor.Blue, Brushes.Blue),
     };
 
+    /// <summary>Box (background) colours: black, the default, then the text colours.</summary>
+    public static IReadOnlyList<ColorOption> BoxColors { get; } =
+        new[] { new ColorOption(TeletextColor.Black, Brushes.Black) }.Concat(All).ToArray();
+
     public string Name => Color.ToString();
 }

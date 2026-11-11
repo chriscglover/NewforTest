@@ -120,6 +120,23 @@
               <CheckBox Content="Box" IsChecked="{Binding Boxed}" />
               <CheckBox Content="Double height" IsChecked="{Binding DoubleHeight}" />
             </StackPanel>
+
+            <TextBlock Text="BOX COLOUR" Classes="heading" />
+            <ListBox ItemsSource="{Binding BoxColors}" SelectedItem="{Binding SelectedBoxColor}" Background="Transparent"
+                     IsEnabled="{Binding Boxed}"
+                     ToolTip.Tip="Background inside the box. Colours other than black use two cells, so 32 characters fit a line instead of 34.">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ColorOption">
+                  <Border Width="22" Height="18" CornerRadius="3" Background="{Binding Brush}" BorderBrush="Gray" BorderThickness="1"
+                          ToolTip.Tip="{Binding Name}" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
             <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto" Margin="0,6,0,0">
               <TextBlock Grid.Row="0" Text="Position" VerticalAlignment="Center" />
               <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding Positions}" SelectedItem="{Binding Position}"

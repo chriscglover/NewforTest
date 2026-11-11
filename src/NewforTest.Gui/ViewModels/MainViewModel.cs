@@ -42,6 +42,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _page = PageNumber.TryParse(settings.Page, out var page, out _) ? page : PageNumber.Parse("888");
         _selectedColor = ColorOption.All.FirstOrDefault(c => c.Color == settings.Color) ?? ColorOption.All[0];
         _boxed = settings.Boxed;
+        _selectedBoxColor = ColorOption.BoxColors.FirstOrDefault(c => c.Color == settings.BoxColor) ?? ColorOption.BoxColors[0];
         _doubleHeight = settings.DoubleHeight;
         _position = settings.Position;
         _justification = settings.Justification;
@@ -71,6 +72,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<ColorOption> Colors { get; } = ColorOption.All;
 
+    public IReadOnlyList<ColorOption> BoxColors { get; } = ColorOption.BoxColors;
+
     public IReadOnlyList<VerticalPosition> Positions { get; } = Enum.GetValues<VerticalPosition>();
 
     public IReadOnlyList<Justification> Justifications { get; } = Enum.GetValues<Justification>();
@@ -85,7 +88,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public string? LastFolder { get; private set; }
 
-    public SubtitleStyle Style => new(SelectedColor.Color, DoubleHeight, Boxed, Position, Justification) { CharacterSet = CharacterSet };
+    public SubtitleStyle Style => new(SelectedColor.Color, DoubleHeight, Boxed, Position, Justification)
+    {
+        CharacterSet = CharacterSet,
+        BoxColor = SelectedBoxColor.Color,
+    };
 
     // ---------------------------------------------------------------- Connection
 
@@ -202,6 +209,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private ColorOption _selectedColor;
     [ObservableProperty] private bool _boxed;
+    [ObservableProperty] private ColorOption _selectedBoxColor;
     [ObservableProperty] private bool _doubleHeight;
     [ObservableProperty] private VerticalPosition _position;
     [ObservableProperty] private Justification _justification;
@@ -209,6 +217,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedColorChanged(ColorOption value) => StyleChanged();
     partial void OnBoxedChanged(bool value) => StyleChanged();
+    partial void OnSelectedBoxColorChanged(ColorOption value) => StyleChanged();
     partial void OnDoubleHeightChanged(bool value) => StyleChanged();
     partial void OnPositionChanged(VerticalPosition value) => StyleChanged();
     partial void OnJustificationChanged(Justification value) => StyleChanged();
@@ -249,7 +258,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(CustomText))
         {
             CustomTextError = null;
-            CustomTextInfo = $"Up to {SubtitleRowBuilder.MaxTextLength(Boxed)} characters per line.";
+            CustomTextInfo = $"Up to {SubtitleRowBuilder.MaxTextLength(Style)} characters per line.";
             return;
         }
 
@@ -258,7 +267,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             CustomTextError = null;
             int longest = lines.Max(l => l.Length);
-            CustomTextInfo = $"{lines.Length} line{(lines.Length == 1 ? "" : "s")}, longest {longest} of {SubtitleRowBuilder.MaxTextLength(Boxed)} characters.";
+            CustomTextInfo = $"{lines.Length} line{(lines.Length == 1 ? "" : "s")}, longest {longest} of {SubtitleRowBuilder.MaxTextLength(Style)} characters.";
         }
         else
         {
@@ -594,6 +603,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Page = _page?.ToString() ?? "888",
         Color = SelectedColor.Color,
         Boxed = Boxed,
+        BoxColor = SelectedBoxColor.Color,
         DoubleHeight = DoubleHeight,
         Position = Position,
         Justification = Justification,

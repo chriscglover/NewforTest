@@ -8,8 +8,10 @@ namespace NewforTest.Core;
 /// <remarks>
 /// Text row layout (all bytes odd parity apart from the padding):
 /// <code>
-/// [height] [spaces] [colour] ([SB][SB]) text ([EB][EB]) [padding...]
+/// [height] [spaces] ([box colour][new background]) [colour] ([SB][SB]) text ([EB][EB]) [padding...]
 /// </code>
+/// A box colour other than black is set with New Background, which takes the current text
+/// colour as the background, so the box colour is sent as a text colour first.
 /// The spaces position the text: none for Left (box against the left edge, text in column 4),
 /// as many as fit for Right (End Box codes in columns 38-39), and enough to centre the box for
 /// Centre. The box shows one cell of margin each side of the text. Up to 34 characters fit
@@ -19,7 +21,11 @@ namespace NewforTest.Core;
 public static class SubtitleRowBuilder
 {
     /// <summary>Longest text (in cells) that fits on one row: 34 boxed, 38 unboxed.</summary>
-    public static int MaxTextLength(bool boxed) => Teletext.RowLength - MinimumPrefix(boxed) - Suffix(boxed);
+    public static int MaxTextLength(bool boxed) => Teletext.RowLength - MinimumPrefix(boxed, false) - Suffix(boxed);
+
+    /// <summary>Longest text that fits with this style: 34 boxed, 32 with a coloured box, 38 unboxed.</summary>
+    public static int MaxTextLength(SubtitleStyle style) =>
+        Teletext.RowLength - MinimumPrefix(style.Boxed, style.HasColouredBox) - Suffix(style.Boxed);
 
     /// <summary>Shortens <paramref name="text"/> to fit on a row if needed.</summary>
     public static string FitText(string text, bool boxed)
@@ -100,14 +106,14 @@ public static class SubtitleRowBuilder
     {
         byte[] cells = EncodeText(line, style, out var lineColor);
         bool boxed = style.Boxed;
-        int minPrefix = MinimumPrefix(boxed);
+        int minPrefix = MinimumPrefix(boxed, style.HasColouredBox);
         int latestStart = Teletext.RowLength - Suffix(boxed) - cells.Length;
 
         if (latestStart < minPrefix)
         {
             row = null;
-            error = $"\"{line.ToPlainText()}\" is {cells.Length} characters; at most {MaxTextLength(boxed)} " +
-                    $"fit on {(boxed ? "a boxed" : "an unboxed")} row.";
+            error = $"\"{line.ToPlainText()}\" is {cells.Length} characters; at most {MaxTextLength(style)} " +
+                    $"fit on {(style.HasColouredBox ? "a row with a coloured box" : boxed ? "a boxed row" : "an unboxed row")}.";
             return false;
         }
 
@@ -128,6 +134,13 @@ public static class SubtitleRowBuilder
         // Height must come first: it applies from this position to the end of the row
         bytes.Add(style.DoubleHeight ? Teletext.DoubleHeight : Teletext.NormalHeight);
         bytes.AddRange(Enumerable.Repeat(Teletext.Space, start - minPrefix));
+
+        // Box colour: New Background takes the current text colour, so send the box colour first
+        if (style.HasColouredBox)
+        {
+            bytes.Add((byte)style.BoxColor);
+            bytes.Add(Teletext.NewBackground);
+        }
 
         // Colour before the box, as broadcast STL files do, so the box has one cell of margin
         // each side: Start Box and End Box both take effect after their own cell
@@ -227,8 +240,9 @@ public static class SubtitleRowBuilder
         return row;
     }
 
-    // Before the text: height code, two Start Box codes if boxed, the colour code
-    private static int MinimumPrefix(bool boxed) => 1 + (boxed ? 2 : 0) + 1;
+    // Before the text: height code, box colour and New Background if coloured, the colour code,
+    // two Start Box codes if boxed
+    private static int MinimumPrefix(bool boxed, bool colouredBox) => 1 + (colouredBox ? 2 : 0) + 1 + (boxed ? 2 : 0);
 
     // After the text: two End Box codes if boxed
     private static int Suffix(bool boxed) => boxed ? 2 : 0;

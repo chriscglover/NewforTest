@@ -4,9 +4,11 @@ using System.Numerics;
 
 namespace NewforTest.Core;
 
-/// <summary>Alphanumeric foreground colours (WST spacing attributes 0x01-0x07).</summary>
+/// <summary>Teletext colours (WST alphanumeric colour codes 0x00-0x07).</summary>
 public enum TeletextColor : byte
 {
+    /// <summary>For box (background) colours. Level 1 decoders can't show black text.</summary>
+    Black = 0x00,
     Red = 0x01,
     Green = 0x02,
     Yellow = 0x03,
@@ -29,6 +31,10 @@ public static class Teletext
     public const byte StartBox = 0x0B;
     public const byte NormalHeight = 0x0C;
     public const byte DoubleHeight = 0x0D;
+    public const byte BlackBackground = 0x1C;
+
+    /// <summary>Sets the background to the current text colour, from this cell on.</summary>
+    public const byte NewBackground = 0x1D;
     public const byte Space = 0x20;
 
     /// <summary>
