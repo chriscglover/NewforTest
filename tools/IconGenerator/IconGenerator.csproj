@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Draws assets/NewforTest.ico and NewforTest-256.png. Not part of the solution build.
-       Run from the repository root:  dotnet run --project tools/IconGenerator -- assets -->
+       Usage is in Program.cs (XML comments can't contain a double hyphen). -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>

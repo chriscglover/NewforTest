@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Writes NewforTest-soak.stl, the soak test subtitle file, and checks it with the app's own
+       STL parser. Not part of the solution build. Usage is in Program.cs. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/NewforTest.Core/NewforTest.Core.csproj" />
+  </ItemGroup>
+
+</Project>
