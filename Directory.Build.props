@@ -8,7 +8,7 @@
 
     <!-- The release version, shown by every app (see AppVersion) and in the exe file properties.
          The git commit is not appended, so Product version reads exactly this. -->
-    <Version>4.0</Version>
+    <Version>4.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>Christopher Glover</Authors>
     <Copyright>(c) 2026 Christopher Glover</Copyright>
