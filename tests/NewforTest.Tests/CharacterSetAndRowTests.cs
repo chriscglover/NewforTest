@@ -245,6 +245,11 @@ public class RowLayoutTests
         var spaces = SubtitleLine.FromRaw(Enumerable.Repeat((byte)'X', 40).Concat(new byte[] { 0x20, 0x20 }).ToArray());
         Assert.True(SubtitleRowBuilder.TryBuild(spaces, new SubtitleStyle(), out _, out _));
 
+        // Real broadcast STL files often put the second End Box in column 41: harmless, so dropped
+        var endBoxIn41 = SubtitleLine.FromRaw(new byte[] { 0x0D, 0x0B, 0x0B }.Concat(Enumerable.Repeat((byte)'X', 36)).Concat(new byte[] { 0x0A, 0x0A }).ToArray());
+        Assert.True(SubtitleRowBuilder.TryBuild(endBoxIn41, new SubtitleStyle(), out var row, out _));
+        Assert.Equal(Teletext.OddParity(Teletext.EndBox), row![39]);
+
         var tooLong = SubtitleLine.FromRaw(Enumerable.Repeat((byte)'X', 41).ToArray());
         Assert.False(SubtitleRowBuilder.TryBuild(tooLong, new SubtitleStyle(), out _, out var error));
         Assert.Contains("41 characters", error);

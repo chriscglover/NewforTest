@@ -1,0 +1,184 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:NewforTest.Gui.ViewModels"
+        xmlns:controls="using:NewforTest.Gui.Controls"
+        xmlns:core="using:NewforTest.Core"
+        x:Class="NewforTest.Gui.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Newfor Test"
+        Width="1400" Height="900" MinWidth="1080" MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        DragDrop.AllowDrop="True">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="F5" Command="{Binding PlayPauseCommand}" />
+    <KeyBinding Gesture="F6" Command="{Binding StopCommand}" />
+    <KeyBinding Gesture="Ctrl+Right" Command="{Binding NextCueCommand}" />
+    <KeyBinding Gesture="Ctrl+Left" Command="{Binding PreviousCueCommand}" />
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenFileCommand}" />
+    <KeyBinding Gesture="F9" Command="{Binding ClearScreenCommand}" />
+  </Window.KeyBindings>
+
+  <DockPanel>
+
+    <!-- Connection -->
+    <Border DockPanel.Dock="Top" Padding="14,10"
+            Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Inserter" VerticalAlignment="Center" FontWeight="SemiBold" />
+        <TextBox Text="{Binding Host}" Width="160" Watermark="IP address"
+                 IsEnabled="{Binding CanEditAddress}" ToolTip.Tip="Newfor inserter IP address or host name" />
+        <TextBox Text="{Binding PortText}" Width="72" Watermark="Port"
+                 IsEnabled="{Binding CanEditAddress}" ToolTip.Tip="TCP port" />
+        <TextBlock Text="Page" VerticalAlignment="Center" Margin="10,0,0,0" />
+        <TextBox Text="{Binding PageText}" Width="64" Watermark="888"
+                 ToolTip.Tip="Teletext subtitle page (magazine 1-8, e.g. 888 or 1FF)" />
+        <Button Content="{Binding ConnectButtonText}" Command="{Binding ToggleConnectionCommand}"
+                Classes="accent" MinWidth="110" Margin="6,0,0,0" />
+        <Ellipse Width="10" Height="10" Fill="{Binding StatusBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <TextBlock Text="{Binding ConnectionStatus}" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding PageError}" Classes="error" VerticalAlignment="Center" Margin="12,0,0,0"
+                   IsVisible="{Binding PageError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Border>
+
+    <Grid RowDefinitions="*,4,170" Margin="10">
+
+      <Grid Grid.Row="0" ColumnDefinitions="*,12,360">
+
+        <!-- Preview, transport and cue list -->
+        <Grid Grid.Column="0" RowDefinitions="5*,Auto,Auto,3*">
+          <Border Grid.Row="0" Background="Black" CornerRadius="4" ClipToBounds="True">
+            <controls:TeletextView Screen="{Binding Screen}" Margin="6" />
+          </Border>
+
+          <!-- Transport -->
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,10,0,4">
+            <Button Content="Open file..." Command="{Binding OpenFileCommand}" ToolTip.Tip="Open an .srt or .stl file (Ctrl+O). You can also drop one on the window." />
+            <Border Width="10" />
+            <Button Content="Prev" Command="{Binding PreviousCueCommand}" IsEnabled="{Binding HasFile}" ToolTip.Tip="Previous cue (Ctrl+Left)" />
+            <Button Content="{Binding PlayPauseText}" Command="{Binding PlayPauseCommand}" IsEnabled="{Binding HasFile}"
+                    Classes="accent" MinWidth="76" ToolTip.Tip="Play / pause (F5)" />
+            <Button Content="Stop" Command="{Binding StopCommand}" IsEnabled="{Binding HasFile}" ToolTip.Tip="Stop and clear (F6)" />
+            <Button Content="Next" Command="{Binding NextCueCommand}" IsEnabled="{Binding HasFile}" ToolTip.Tip="Next cue (Ctrl+Right)" />
+            <CheckBox Content="Loop" IsChecked="{Binding Loop}" Margin="8,0,0,0" />
+            <CheckBox Content="Follow" IsChecked="{Binding FollowPlayback}" ToolTip.Tip="Select the cue on screen as it plays" />
+            <TextBlock Text="{Binding PositionText}" Classes="mono" FontSize="20" VerticalAlignment="Center" Margin="12,0,0,0" />
+          </StackPanel>
+          <TextBlock Grid.Row="2" Text="{Binding FileInfo}" Classes="hint" Margin="2,0,0,6" />
+
+          <!-- Cue list -->
+          <Border Grid.Row="3" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" CornerRadius="4">
+            <DockPanel>
+              <Grid DockPanel.Dock="Top" ColumnDefinitions="56,110,110,*" Margin="8,4">
+                <TextBlock Grid.Column="0" Text="#" Classes="hint" />
+                <TextBlock Grid.Column="1" Text="In" Classes="hint" />
+                <TextBlock Grid.Column="2" Text="Out" Classes="hint" />
+                <TextBlock Grid.Column="3" Text="Text (double-click a cue to go to it)" Classes="hint" />
+              </Grid>
+              <ListBox x:Name="CueList" ItemsSource="{Binding Cues}" SelectedItem="{Binding SelectedCue}"
+                       Classes="compact mono" FontSize="12.5">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CueItem">
+                    <Grid ColumnDefinitions="56,110,110,*" ToolTip.Tip="{Binding Error}">
+                      <TextBlock Grid.Column="0" Text="{Binding Number}" Foreground="{Binding TextBrush}" />
+                      <TextBlock Grid.Column="1" Text="{Binding In}" Foreground="{Binding TextBrush}" />
+                      <TextBlock Grid.Column="2" Text="{Binding Out}" Foreground="{Binding TextBrush}" />
+                      <TextBlock Grid.Column="3" Text="{Binding Text}" Foreground="{Binding TextBrush}" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+          </Border>
+        </Grid>
+
+        <!-- Style and sending -->
+        <ScrollViewer Grid.Column="2">
+          <StackPanel Margin="0,0,8,0">
+
+            <TextBlock Text="COLOUR" Classes="heading" Margin="0,0,0,6" />
+            <ListBox ItemsSource="{Binding Colors}" SelectedItem="{Binding SelectedColor}" Background="Transparent">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ColorOption">
+                  <StackPanel Orientation="Horizontal" Spacing="6" ToolTip.Tip="{Binding Name}">
+                    <Border Width="16" Height="16" CornerRadius="3" Background="{Binding Brush}" BorderBrush="Gray" BorderThickness="1" />
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="12" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBlock Text="STYLE" Classes="heading" />
+            <StackPanel Orientation="Horizontal" Spacing="16">
+              <CheckBox Content="Box" IsChecked="{Binding Boxed}" />
+              <CheckBox Content="Double height" IsChecked="{Binding DoubleHeight}" />
+            </StackPanel>
+            <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto" Margin="0,6,0,0">
+              <TextBlock Grid.Row="0" Text="Position" VerticalAlignment="Center" />
+              <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding Positions}" SelectedItem="{Binding Position}"
+                        HorizontalAlignment="Stretch" Margin="0,2" />
+              <TextBlock Grid.Row="1" Text="Justify" VerticalAlignment="Center" />
+              <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Justifications}" SelectedItem="{Binding Justification}"
+                        HorizontalAlignment="Stretch" Margin="0,2" />
+              <TextBlock Grid.Row="2" Text="Character set" VerticalAlignment="Center" />
+              <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding CharacterSets}" SelectedItem="{Binding CharacterSet}"
+                        HorizontalAlignment="Stretch" Margin="0,2"
+                        ToolTip.Tip="Must match the national option set on the inserter for this page" />
+            </Grid>
+
+            <TextBlock Text="TEST SUBTITLES" Classes="heading" />
+            <UniformGrid Columns="4">
+              <Button Content="1 line" Command="{Binding SendTestCommand}" CommandParameter="1" HorizontalAlignment="Stretch" Margin="0,0,4,0" />
+              <Button Content="2 lines" Command="{Binding SendTestCommand}" CommandParameter="2" HorizontalAlignment="Stretch" Margin="0,0,4,0" />
+              <Button Content="3 lines" Command="{Binding SendTestCommand}" CommandParameter="3" HorizontalAlignment="Stretch" Margin="0,0,4,0" />
+              <Button Content="Clear" Command="{Binding ClearScreenCommand}" HorizontalAlignment="Stretch" ToolTip.Tip="Send CLEAR (F9)" />
+            </UniformGrid>
+
+            <TextBlock Text="CUSTOM TEXT" Classes="heading" />
+            <TextBox Text="{Binding CustomText}" AcceptsReturn="True" Height="64" Classes="mono"
+                     Watermark="One subtitle line per text line" TextWrapping="NoWrap">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCustomCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+            <TextBlock Text="{Binding CustomTextError}" Classes="error" Margin="0,4,0,0"
+                       IsVisible="{Binding CustomTextError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <TextBlock Text="{Binding CustomTextInfo}" Classes="hint" Margin="0,4,0,0"
+                       IsVisible="{Binding CustomTextInfo, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <Button Content="Send text" Command="{Binding SendCustomCommand}" Margin="0,6,0,0" ToolTip.Tip="Ctrl+Enter" />
+
+            <TextBlock Text="SOAK TEST" Classes="heading" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Every" VerticalAlignment="Center" />
+              <NumericUpDown Value="{Binding SoakSeconds}" Minimum="0.1" Maximum="3600" Increment="1" FormatString="0.##" Width="120" />
+              <TextBlock Text="seconds" VerticalAlignment="Center" />
+            </StackPanel>
+            <Button Content="{Binding SoakButtonText}" Command="{Binding ToggleSoakCommand}" Margin="0,6,0,0" />
+            <TextBlock Text="Cycles the 1, 2 and 3 line test subtitles until stopped." Classes="hint" Margin="0,4,0,0" />
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+
+      <GridSplitter Grid.Row="1" ResizeDirection="Rows" Background="Transparent" />
+
+      <!-- Log -->
+      <Border Grid.Row="2" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" CornerRadius="4">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8,4">
+            <TextBlock Text="LOG" Classes="heading" Margin="0" VerticalAlignment="Center" />
+            <CheckBox Content="Hex dump" IsChecked="{Binding HexDump}" ToolTip.Tip="Log every packet sent, decoded and as hex" />
+            <Button Content="Copy" Command="{Binding CopyLogCommand}" Padding="10,2" />
+            <Button Content="Clear" Command="{Binding ClearLogCommand}" Padding="10,2" />
+          </StackPanel>
+          <ListBox x:Name="LogList" ItemsSource="{Binding Log}" Classes="compact mono" FontSize="12" />
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

@@ -15,7 +15,7 @@ public sealed class NewforConnectionException : Exception
 /// <see cref="NewforConnectionException"/>; writes nothing to the console. Thread-safe:
 /// each call's packets go out together.
 /// </summary>
-public sealed class NewforClient : IDisposable
+public sealed class NewforClient : INewforOutput, IDisposable
 {
     public static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(5);
 

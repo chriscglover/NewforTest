@@ -15,7 +15,8 @@ public enum PlaybackState
 public sealed record CueShownEventArgs(SubtitleCue Cue, int Index, TimeSpan Lateness);
 
 /// <summary>
-/// Plays a list of cues to a <see cref="NewforClient"/> in real time, on its own thread.
+/// Plays a list of cues to an <see cref="INewforOutput"/> (normally a <see cref="NewforClient"/>)
+/// in real time, on its own thread.
 /// </summary>
 /// <remarks>
 /// <para>Timing: the thread sleeps until about 20 ms before each event, then spins, so cues go out
@@ -30,7 +31,7 @@ public sealed class SubtitlePlayer : IDisposable
 {
     private static readonly TimeSpan SpinThreshold = TimeSpan.FromMilliseconds(20);
 
-    private readonly NewforClient _client;
+    private readonly INewforOutput _output;
     private readonly SubtitleCue[] _cues;
     private readonly object _sync = new();
     private readonly AutoResetEvent _wake = new(false);
@@ -43,9 +44,9 @@ public sealed class SubtitlePlayer : IDisposable
     private int _onScreen = -1; // index of the cue currently on screen
     private bool _disposed;
 
-    public SubtitlePlayer(NewforClient client, SubtitleDocument document, PageNumber page, SubtitleStyle style)
+    public SubtitlePlayer(INewforOutput output, SubtitleDocument document, PageNumber page, SubtitleStyle style)
     {
-        _client = client;
+        _output = output;
         Document = document;
         _cues = document.Cues.OrderBy(c => c.Start).ToArray();
         Page = page;
@@ -299,7 +300,7 @@ public sealed class SubtitlePlayer : IDisposable
                 var lateness = position - cue.Start;
                 try
                 {
-                    _client.SendSubtitle(Page, cue.Lines, cue.ApplyTo(Style));
+                    _output.Send(NewforPackets.Subtitle(Page, cue.Lines, cue.ApplyTo(Style)));
                     lateness = Position - cue.Start;
                     SetOnScreen(target);
                     CueShown?.Invoke(new CueShownEventArgs(cue, target, lateness));
@@ -313,7 +314,7 @@ public sealed class SubtitlePlayer : IDisposable
             }
             else
             {
-                _client.Clear();
+                _output.Send(new[] { NewforPackets.Clear() });
                 SetOnScreen(-1);
                 if (onScreen >= 0)
                     CueCleared?.Invoke(_cues[onScreen]);

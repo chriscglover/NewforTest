@@ -362,3 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /newfor.pcap
+
+# Local test material (sample subtitle files etc.), not for the repository
+/ignore/
