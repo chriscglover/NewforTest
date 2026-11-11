@@ -4,6 +4,7 @@
     <OutputType>WinExe</OutputType>
     <AssemblyName>NewforTestGui</AssemblyName>
     <RootNamespace>NewforTest.Gui</RootNamespace>
+    <ApplicationIcon>../../assets/NewforTest.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <!-- Bindings are checked when building, so a typo in XAML is a build error, not a silent blank -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
@@ -19,6 +20,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NewforTest.Core\NewforTest.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Window and taskbar icon (the exe icon is ApplicationIcon above) -->
+  <ItemGroup>
+    <AvaloniaResource Include="../../assets/NewforTest.ico" Link="Assets/NewforTest.ico" />
   </ItemGroup>
 
   <ItemGroup>

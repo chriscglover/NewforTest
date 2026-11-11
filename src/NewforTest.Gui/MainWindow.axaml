@@ -6,6 +6,7 @@
         x:Class="NewforTest.Gui.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Newfor Test"
+        Icon="/Assets/NewforTest.ico"
         Width="1400" Height="900" MinWidth="1080" MinHeight="680"
         WindowStartupLocation="CenterScreen"
         DragDrop.AllowDrop="True">
