@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Protocol, teletext encoding and (later) subtitle file parsing.
+       No console or UI code here: shared by the CLI and the Avalonia GUI. -->
+
+</Project>
