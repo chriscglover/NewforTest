@@ -240,7 +240,9 @@ Files are recognised by content as well as extension. Warnings (skipped cues, un
 NewforTest --ip 10.0.0.5 --play NewforTest-soak.stl --loop
 ```
 
-To rebuild it, for example with a different interval, run `dotnet run --project tools/SoakStlGenerator -- [file.stl] [--interval <seconds>] [--cues <list.tsv>]`. The generator checks every subtitle in its output with the app's STL parser, and `--cues` writes a list of the subtitles with their times.
+[NewforTest-soak-sample.stl](NewforTest-soak-sample.stl) is a 20-subtitle version, 1 min 50 s long, with one of each kind: every text and box colour, box off, single and double height, 1, 2 and 3 lines, all 9 positions, and the longest labels. It's for a quick check, or for playouts that only load part of a file (such as FAB Subtitler's demo, which shows the first 20).
+
+To rebuild them, for example with a different interval, run `dotnet run --project tools/SoakStlGenerator -- [file.stl] [--sample] [--interval <seconds>] [--cues <list.tsv>]`. The generator checks every subtitle in its output with the app's STL parser, and `--cues` writes a list of the subtitles with their times.
 
 The parser has been checked against all 108 STL test files from IRT's [Subtitle Conversion Framework](https://github.com/IRT-Open-Source/scf), and against a set of 58 UK broadcast files (157,192 cues, all playable).
 
@@ -370,7 +372,7 @@ The version is set once, in `<Version>` in [Directory.Build.props](Directory.Bui
 
 ```
 assets/              The app icon (NewforTest.ico, used by both exes and the GUI window).
-NewforTest-soak.stl  The soak test subtitle file.
+NewforTest-soak.stl  The soak test subtitle file (and NewforTest-soak-sample.stl, 20 of each kind).
 tools/IconGenerator/ Draws the icon: dotnet run --project tools/IconGenerator -- assets
 tools/SoakStlGenerator/ Writes and checks NewforTest-soak.stl: dotnet run --project tools/SoakStlGenerator
 src/

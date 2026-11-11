@@ -11,13 +11,18 @@ using NewforTest.Core;
 // (top left, top centre, top right, middle ..., bottom right), one every interval, each replacing
 // the last; then a clear for one interval. Every subtitle says what should be on screen.
 //
-// Usage: dotnet run --project tools/SoakStlGenerator -- [out.stl] [--interval <seconds>] [--cues <list.tsv>]
-//   out.stl     default NewforTest-soak.stl
+// --sample writes 20 subtitles instead, one of each kind: every text and box colour, box off,
+// single and double height, 1, 2 and 3 lines, all 9 positions. For playouts that limit how much
+// of a file they show (e.g. a demo version), and for a quick check.
+//
+// Usage: dotnet run --project tools/SoakStlGenerator -- [out.stl] [--sample] [--interval <seconds>] [--cues <list.tsv>]
+//   out.stl     default NewforTest-soak.stl, or NewforTest-soak-sample.stl with --sample
 //   --interval  seconds per subtitle (default 5), rounded to whole frames at 25 fps
 //   --cues      also write a tab-separated list of the cues and what each should look like
 
-string outPath = "NewforTest-soak.stl";
+string? outPath = null;
 string? cuesPath = null;
+bool sample = false;
 double intervalSeconds = 5;
 for (int i = 0; i < args.Length; i++)
 {
@@ -28,6 +33,9 @@ for (int i = 0; i < args.Length; i++)
             break;
         case "--cues":
             cuesPath = args[++i];
+            break;
+        case "--sample":
+            sample = true;
             break;
         default:
             outPath = args[i];
@@ -43,8 +51,9 @@ if (intervalFrames < 1)
     return 2;
 }
 
-var expected = SoakTest.Build(intervalFrames);
-byte[] file = SoakTest.WriteStl(expected, intervalFrames, Fps);
+outPath ??= sample ? "NewforTest-soak-sample.stl" : "NewforTest-soak.stl";
+var expected = sample ? SoakTest.BuildSample(intervalFrames) : SoakTest.Build(intervalFrames);
+byte[] file = SoakTest.WriteStl(expected, intervalFrames, Fps, sample ? "NewforTest soak test sample" : "NewforTest soak test");
 File.WriteAllBytes(outPath, file);
 
 TimeSpan passLength = TimeSpan.FromSeconds((double)SoakTest.PassFrames(expected, intervalFrames) / Fps);
@@ -85,9 +94,6 @@ internal static class SoakTest
     private static readonly VerticalPosition[] Positions = { VerticalPosition.Top, VerticalPosition.Middle, VerticalPosition.Lower };
     private static readonly Justification[] Justifications = { Justification.Left, Justification.Centre, Justification.Right };
 
-    /// <summary>Subtitles in each sequence (one colour pair, one height).</summary>
-    public const int PerSequence = 27;
-
     /// <summary>Every subtitle in order, with its in time (frames from 00:00:00:00).</summary>
     public static List<SoakCue> Build(int intervalFrames)
     {
@@ -124,6 +130,53 @@ internal static class SoakTest
         return cues;
     }
 
+    /// <summary>
+    /// 20 subtitles, one of each kind: every text colour and every box colour, box off, single and
+    /// double height, 1, 2 and 3 lines, all 9 positions, and the longest one-line labels. Back to
+    /// back, with a clear before the first and after the last.
+    /// </summary>
+    public static List<SoakCue> BuildSample(int intervalFrames)
+    {
+        const VerticalPosition Top = VerticalPosition.Top, Middle = VerticalPosition.Middle, Bottom = VerticalPosition.Lower;
+        const Justification Left = Justification.Left, Centre = Justification.Centre, Right = Justification.Right;
+        const TeletextColor White = TeletextColor.White, Yellow = TeletextColor.Yellow, Cyan = TeletextColor.Cyan,
+            Green = TeletextColor.Green, Magenta = TeletextColor.Magenta, Red = TeletextColor.Red,
+            Blue = TeletextColor.Blue, Black = TeletextColor.Black;
+
+        var specs = new (TeletextColor Text, TeletextColor? Box, bool DoubleHeight, int Lines, VerticalPosition Position, Justification Justification)[]
+        {
+            // Single height, black box
+            (White, Black, false, 1, Bottom, Left),
+            (Yellow, Black, false, 2, Bottom, Centre),
+            (Cyan, Black, false, 3, Bottom, Right),
+            // Single height, coloured boxes
+            (Red, Blue, false, 1, Top, Left),
+            (Yellow, Blue, false, 2, Top, Centre),
+            (White, Red, false, 3, Top, Right),
+            (Magenta, Yellow, false, 1, Middle, Centre), // the longest label
+            (Green, Magenta, false, 2, Middle, Left),
+            (Blue, White, false, 3, Middle, Right),
+            // Double height
+            (White, Black, true, 1, Bottom, Right),
+            (Yellow, Blue, true, 2, Bottom, Left),
+            (Cyan, Red, true, 3, Bottom, Centre),
+            (Yellow, Magenta, true, 1, Top, Right),     // the longest double-height label
+            (White, Green, true, 2, Top, Left),
+            (Red, Cyan, true, 3, Middle, Centre),
+            // Box off
+            (White, null, false, 1, Bottom, Centre),
+            (Yellow, null, false, 2, Middle, Right),
+            (Cyan, null, false, 3, Top, Left),
+            (Green, null, true, 2, Bottom, Right),
+            (Magenta, null, true, 1, Top, Centre),
+        };
+
+        long t = ProgrammeStart + intervalFrames;
+        return specs.Select((s, i) => new SoakCue(i + 1, t + (long)intervalFrames * i, s.Text, s.Box, s.DoubleHeight,
+                s.Position, s.Justification, Label(s.Text, s.Box, s.DoubleHeight, s.Position, s.Justification, s.Lines)))
+            .ToList();
+    }
+
     /// <summary>Length of one pass from the programme start, including the clears.</summary>
     public static long PassFrames(List<SoakCue> cues, int intervalFrames) =>
         cues[^1].InFrames + intervalFrames * 2 - ProgrammeStart;
@@ -154,10 +207,10 @@ internal static class SoakTest
     /// files. Single-height rows leave out the normal height code (rows start in normal height), so
     /// left-justified text sits a column further left.
     /// </summary>
-    public static byte[] WriteStl(List<SoakCue> cues, int intervalFrames, int fps)
+    public static byte[] WriteStl(List<SoakCue> cues, int intervalFrames, int fps, string title)
     {
         var output = new MemoryStream();
-        output.Write(Gsi(cues, intervalFrames, fps));
+        output.Write(Gsi(cues, intervalFrames, fps, title));
 
         foreach (var cue in cues)
         {
@@ -203,7 +256,7 @@ internal static class SoakTest
         return output.ToArray();
     }
 
-    private static byte[] Gsi(List<SoakCue> cues, int intervalFrames, int fps)
+    private static byte[] Gsi(List<SoakCue> cues, int intervalFrames, int fps, string title)
     {
         var gsi = Enumerable.Repeat((byte)' ', 1024).ToArray();
         void Put(int offset, int length, string value) =>
@@ -216,7 +269,7 @@ internal static class SoakTest
         Put(11, 1, "1");                                // DSC: level-1 teletext
         Put(12, 2, "00");                               // CCT: Latin
         Put(14, 2, "09");                               // LC: English
-        Put(16, 32, "NewforTest soak test");            // OPT: programme title
+        Put(16, 32, title);                             // OPT: programme title
         Put(80, 32, $"{intervalFrames / (double)fps:0.###} s per subtitle"); // TPT: episode title
         Put(176, 32, "NewforTest");                     // TCD: translator's contact details
         Put(224, 6, date);                              // CD: created
