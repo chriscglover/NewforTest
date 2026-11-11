@@ -13,6 +13,8 @@ There are two apps, built on the same core:
 
 Version 4.1. MIT licensed.
 
+**Tested on real hardware:** NewforTest has been tested successfully against a **Grass Valley ICE** Newfor receiver, with the resulting subtitles displayed correctly on a **Telestream PRISM**.
+
 ---
 
 ## Contents
@@ -318,9 +320,11 @@ Anything else is sent as `?` and reported.
 
 ## Receiver behaviour worth knowing
 
-- **Disconnecting clears the subtitle on some receivers.** The receiver this was tested against shows a subtitle only while the connection is open: a DISCONNECT, or simply closing the TCP connection, clears it. That's why `--send` holds the connection until Ctrl+C or `--hold <seconds>`.
+NewforTest has been tested against a **Grass Valley ICE** Newfor receiver (subtitles checked on a **Telestream PRISM**), and during development against a Newfor databridge feeding a multiviewer.
+
+- **Disconnecting clears the subtitle on some receivers.** The development receiver shows a subtitle only while the connection is open: a DISCONNECT, or simply closing the TCP connection, clears it. That's why `--send` holds the connection until Ctrl+C or `--hold <seconds>`.
 - **Unboxed text** is shown by some decoders but not by others. On a TV in subtitle mode only boxed text is normally visible.
-- **No acknowledgements:** the receiver doesn't reply to Newfor packets, so a send that "succeeds" only means the bytes reached it. Use a decoder or monitor to see the result.
+- **No acknowledgements are read:** Softel's protocol text says an inserter may answer each BUILD with ACK or NAK, but NewforTest doesn't read replies (the development receiver sends none). A send that "succeeds" only means the bytes reached the receiver. Use a decoder or monitor to see the result.
 
 ---
 
@@ -338,13 +342,13 @@ Anything else is sent as `?` and reported.
 
 ### Sending a subtitle
 
-As FAB Subtitler does: **CONNECT** → **CLEAR** → one **BUILD** per row (the first with the clear-screen bit set) → **REVEAL**. A subtitle's packets are always sent together, even when playback and manual sends happen at once.
+As NewforTest 3.4 did, which works on a Grass Valley ICE: **CONNECT** → **CLEAR** → one **BUILD** per row (the first with the clear-screen bit set) → **REVEAL**. (FAB Subtitler differs in the details: it puts all rows in one BUILD, pads with End Box codes and Hamming-codes CONNECT's zero byte. Receivers accept both.) A subtitle's packets are always sent together, even when playback and manual sends happen at once.
 
 ### Encoding
 
 - **Row numbers** are two Hamming 8/4 bytes holding the row's hex nibbles. Row 22 (`0x16`) → `H(1) H(6)` = `02 38`; row 20 (`0x14`) → `02 64`.
 - **Row data** is exactly 40 bytes, each with odd parity. Unused cells are padded with `0xA0`.
-- **Padding byte:** `0xA0` has *even* parity, unlike the rest of the row. It is kept because v3.4's output was matched to FAB Subtitler. The hex dump flags it, so it can be compared against a FAB capture.
+- **Padding byte:** `0xA0` has *even* parity, unlike the rest of the row. It is kept because v3.4 used it and that output works on a Grass Valley ICE. The Axon and Softel protocol descriptions both call for odd parity, i.e. space padding of `0x20`. The hex dump flags it.
 
 ### WST control codes used
 
