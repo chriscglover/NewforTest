@@ -15,14 +15,17 @@ using NewforTest.Core;
 // single and double height, 1, 2 and 3 lines, all 9 positions. For playouts that limit how much
 // of a file they show (e.g. a demo version), and for a quick check.
 //
-// Usage: dotnet run --project tools/SoakStlGenerator -- [out.stl] [--sample] [--interval <seconds>] [--cues <list.tsv>]
+// Usage: dotnet run --project tools/SoakStlGenerator -- [out.stl] [--sample] [--interval <seconds>] [--gap <frames>] [--cues <list.tsv>]
 //   out.stl     default NewforTest-soak.stl, or NewforTest-soak-sample.stl with --sample
-//   --interval  seconds per subtitle (default 5), rounded to whole frames at 25 fps
+//   --interval  seconds from one subtitle to the next (default 5), rounded to whole frames at 25 fps
+//   --gap       frames cleared before the next subtitle (default 6, the minimum FAB Subtitler's
+//               file check accepts; 0 for back to back)
 //   --cues      also write a tab-separated list of the cues and what each should look like
 
 string? outPath = null;
 string? cuesPath = null;
 bool sample = false;
+int gapFrames = 6;
 double intervalSeconds = 5;
 for (int i = 0; i < args.Length; i++)
 {
@@ -33,6 +36,9 @@ for (int i = 0; i < args.Length; i++)
             break;
         case "--cues":
             cuesPath = args[++i];
+            break;
+        case "--gap":
+            gapFrames = int.Parse(args[++i], CultureInfo.InvariantCulture);
             break;
         case "--sample":
             sample = true;
@@ -45,19 +51,19 @@ for (int i = 0; i < args.Length; i++)
 
 const int Fps = 25;
 int intervalFrames = (int)Math.Round(intervalSeconds * Fps);
-if (intervalFrames < 1)
+if (intervalFrames < 1 || gapFrames < 0 || gapFrames >= intervalFrames)
 {
-    Console.Error.WriteLine("The interval must be at least one frame (0.04 s).");
+    Console.Error.WriteLine("The interval must be at least one frame (0.04 s), and the gap shorter than the interval.");
     return 2;
 }
 
 outPath ??= sample ? "NewforTest-soak-sample.stl" : "NewforTest-soak.stl";
 var expected = sample ? SoakTest.BuildSample(intervalFrames) : SoakTest.Build(intervalFrames);
-byte[] file = SoakTest.WriteStl(expected, intervalFrames, Fps, sample ? "NewforTest soak test sample" : "NewforTest soak test");
+byte[] file = SoakTest.WriteStl(expected, intervalFrames, gapFrames, Fps, sample ? "NewforTest soak test sample" : "NewforTest soak test");
 File.WriteAllBytes(outPath, file);
 
 TimeSpan passLength = TimeSpan.FromSeconds((double)SoakTest.PassFrames(expected, intervalFrames) / Fps);
-Console.WriteLine($"{outPath}: {expected.Count} subtitles, {intervalFrames / (double)Fps:0.###} s each, " +
+Console.WriteLine($"{outPath}: {expected.Count} subtitles, one every {intervalFrames / (double)Fps:0.###} s with a {gapFrames}-frame gap, " +
                   $"{passLength:h\\:mm\\:ss} per pass.");
 
 if (cuesPath is not null)
@@ -71,7 +77,7 @@ if (cuesPath is not null)
     Console.WriteLine($"Cue list: {cuesPath}");
 }
 
-int errors = SoakTest.Verify(SubtitleFile.Load(outPath), expected, intervalFrames, Fps);
+int errors = SoakTest.Verify(SubtitleFile.Load(outPath), expected, intervalFrames - gapFrames, Fps);
 Console.WriteLine(errors == 0 ? "Checked with the NewforTest STL parser: every subtitle shows as labelled." : $"{errors} problems found.");
 return errors == 0 ? 0 : 1;
 
@@ -207,7 +213,7 @@ internal static class SoakTest
     /// files. Single-height rows leave out the normal height code (rows start in normal height), so
     /// left-justified text sits a column further left.
     /// </summary>
-    public static byte[] WriteStl(List<SoakCue> cues, int intervalFrames, int fps, string title)
+    public static byte[] WriteStl(List<SoakCue> cues, int intervalFrames, int gapFrames, int fps, string title)
     {
         var output = new MemoryStream();
         output.Write(Gsi(cues, intervalFrames, fps, title));
@@ -245,7 +251,7 @@ internal static class SoakTest
             tti[3] = 0xFF;                              // EBN: the last (only) block
             tti[4] = 0;                                 // CS: not cumulative
             Timecode(cue.InFrames, fps).CopyTo(tti, 5);                  // TCI
-            Timecode(cue.InFrames + intervalFrames, fps).CopyTo(tti, 9); // TCO
+            Timecode(cue.InFrames + intervalFrames - gapFrames, fps).CopyTo(tti, 9); // TCO: a gap before the next
             tti[13] = (byte)rows[0];                    // VP: first row
             tti[14] = (byte)(1 + Array.IndexOf(Justifications, cue.Justification)); // JC: 1 left, 2 centre, 3 right
             tti[15] = 0;                                // CF: not a comment
@@ -302,7 +308,7 @@ internal static class SoakTest
     /// Plays every cue onto a teletext screen model and checks its rows, text, colours, box,
     /// height and justification, and the timing. Returns the number of problems.
     /// </summary>
-    public static int Verify(SubtitleDocument doc, List<SoakCue> expected, int intervalFrames, int fps)
+    public static int Verify(SubtitleDocument doc, List<SoakCue> expected, int durationFrames, int fps)
     {
         int errors = 0;
         void Fail(string message)
@@ -328,7 +334,7 @@ internal static class SoakTest
             var want = expected[n];
             string name = $"#{want.Number} {string.Join(" | ", want.Lines)}";
 
-            if (cue.Start != TimeSpan.FromSeconds((double)want.InFrames / fps) || cue.Duration != TimeSpan.FromSeconds((double)intervalFrames / fps))
+            if (cue.Start != TimeSpan.FromSeconds((double)want.InFrames / fps) || cue.Duration != TimeSpan.FromSeconds((double)durationFrames / fps))
                 Fail($"{name}: timed {cue.Start}-{cue.End}.");
 
             var screen = new TeletextScreen();

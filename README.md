@@ -231,7 +231,7 @@ Files are recognised by content as well as extension. Warnings (skipped cues, un
 [NewforTest-soak.stl](NewforTest-soak.stl) is a teletext STL file that steps through every combination the layout can produce. Play it in either app, or in any other STL playout, and each subtitle says what should be on screen.
 
 - **Colours:** every text colour on every box colour (49 pairs, White on Black first), then each text colour with the box off.
-- **For each pair:** single height, then double height. Each shows the 1, 2 and 3 line subtitles at the 9 positions in reading order (top left, top centre, top right, middle left ... bottom right), one every 5 seconds, each replacing the last. The screen is cleared for 5 seconds after each sequence, and at the start, so a loop keeps the gap.
+- **For each pair:** single height, then double height. Each shows the 1, 2 and 3 line subtitles at the 9 positions in reading order (top left, top centre, top right, middle left ... bottom right), one every 5 seconds, with a 6-frame clear before the next (FAB Subtitler's file check asks for at least 6 frames between subtitles). The screen is cleared for 5 seconds after each sequence, and at the start, so a loop keeps the gap.
 - **Labels:** "Red on Blue" / "Double height" / "Top Left"; "Red on Blue" / "Double height, Top Left"; or on one line "Red/Blue DH Top Left".
 - **Length:** 3,024 subtitles, 4 h 21 min per pass. Programme start 10:00:00:00; use `--start` (or the GUI's timecode) to begin partway through.
 - **Layout:** rows use the app's own layout, with justification from the JC field, as in broadcast files. Single-height rows leave out the normal-height code, so left-justified text starts a column further left than when the app lays it out.
@@ -242,7 +242,7 @@ NewforTest --ip 10.0.0.5 --play NewforTest-soak.stl --loop
 
 [NewforTest-soak-sample.stl](NewforTest-soak-sample.stl) is a 20-subtitle version, 1 min 50 s long, with one of each kind: every text and box colour, box off, single and double height, 1, 2 and 3 lines, all 9 positions, and the longest labels. It's for a quick check, or for playouts that only load part of a file (such as FAB Subtitler's demo, which shows the first 20).
 
-To rebuild them, for example with a different interval, run `dotnet run --project tools/SoakStlGenerator -- [file.stl] [--sample] [--interval <seconds>] [--cues <list.tsv>]`. The generator checks every subtitle in its output with the app's STL parser, and `--cues` writes a list of the subtitles with their times.
+To rebuild them, for example with a different interval, run `dotnet run --project tools/SoakStlGenerator -- [file.stl] [--sample] [--interval <seconds>] [--gap <frames>] [--cues <list.tsv>]`. The generator checks every subtitle in its output with the app's STL parser, and `--cues` writes a list of the subtitles with their times.
 
 The parser has been checked against all 108 STL test files from IRT's [Subtitle Conversion Framework](https://github.com/IRT-Open-Source/scf), and against a set of 58 UK broadcast files (157,192 cues, all playable).
 
