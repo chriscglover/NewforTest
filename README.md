@@ -1,4 +1,6 @@
-﻿# NewforTest
+<img src="assets/NewforTest-256.png" alt="" width="96" align="right">
+
+# NewforTest
 
 Tools for testing teletext subtitle inserters that use the **Newfor** protocol over TCP/IP. NewforTest sends test subtitles, your own text, or whole **SRT** and **EBU STL** files to an inserter, timed to the frame, and shows exactly what it sent.
 
@@ -342,6 +344,8 @@ The version is set once, in `<Version>` in [Directory.Build.props](Directory.Bui
 ## Project structure
 
 ```
+assets/              The app icon (NewforTest.ico, used by both exes and the GUI window).
+tools/IconGenerator/ Draws the icon: dotnet run --project tools/IconGenerator -- assets
 src/
   NewforTest.Core/   Protocol, teletext encoding, layout, SRT and EBU STL parsers, the real-time
                      player and the teletext screen model. No UI code; shared by both apps.
