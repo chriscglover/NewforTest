@@ -56,6 +56,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _positionTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => UpdatePosition());
 
+        AddLog($"Newfor Test {AppVersion.Display}");
         AddLog("Not connected: anything sent goes to the preview only. Enter the inserter's address and press Connect.");
     }
 

@@ -26,6 +26,12 @@ internal static class Program
             return ExitCodes.Success;
         }
 
+        if (options.ShowVersion)
+        {
+            Console.WriteLine($"NewforTest {AppVersion.Display}");
+            return ExitCodes.Success;
+        }
+
         if (options.Mode != RunMode.Interactive)
             return HeadlessRunner.Run(options);
 

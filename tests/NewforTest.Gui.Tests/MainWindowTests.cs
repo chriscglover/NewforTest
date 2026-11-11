@@ -49,6 +49,18 @@ public sealed class MainWindowTests
     }
 
     [AvaloniaFact]
+    public void Title_and_log_show_the_version()
+    {
+        var (vm, window) = Open();
+
+        Assert.Equal($"Newfor Test {AppVersion.Display}", window.Title);
+        Assert.Contains(vm.Log, line => line.EndsWith($"Newfor Test {AppVersion.Display}"));
+
+        window.Close();
+        vm.Dispose();
+    }
+
+    [AvaloniaFact]
     public void Sending_while_not_connected_updates_the_preview_only()
     {
         var (vm, window) = Open();

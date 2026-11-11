@@ -1,12 +1,15 @@
 <Project>
   <!-- Settings shared by every project in the solution. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Platforms>AnyCPU;x64</Platforms>
 
-    <Version>4.0.0</Version>
+    <!-- The release version, shown by every app (see AppVersion) and in the exe file properties.
+         The git commit is not appended, so Product version reads exactly this. -->
+    <Version>4.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>Christopher Glover</Authors>
     <Copyright>(c) 2026 Christopher Glover</Copyright>
   </PropertyGroup>

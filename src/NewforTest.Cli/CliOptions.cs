@@ -37,6 +37,7 @@ internal sealed record CliOptions
     public PageNumber? Page { get; init; }
     public bool HexDump { get; init; }
     public bool ShowHelp { get; init; }
+    public bool ShowVersion { get; init; }
     public SubtitleStyle Style { get; init; } = new();
 
     public RunMode Mode { get; init; }
@@ -82,6 +83,9 @@ internal sealed record CliOptions
             {
                 case "-h" or "--help" or "/?":
                     o = o with { ShowHelp = true };
+                    continue;
+                case "-v" or "--version":
+                    o = o with { ShowVersion = true };
                     continue;
                 case "--hex":
                     o = o with { HexDump = true };
@@ -278,6 +282,8 @@ internal sealed record CliOptions
 
     public static void PrintUsage(TextWriter w)
     {
+        w.WriteLine($"NewforTest {AppVersion.Display} - Newfor teletext subtitle test injector");
+        w.WriteLine();
         w.WriteLine("Usage: NewforTest [connection] [style] [mode]");
         w.WriteLine();
         w.WriteLine("Connection:");
@@ -308,6 +314,7 @@ internal sealed record CliOptions
         w.WriteLine();
         w.WriteLine("Other:");
         w.WriteLine("  --hex                    Show every packet sent as a decoded hex dump");
+        w.WriteLine("  -v, --version            Show the version");
         w.WriteLine("  -h, --help               Show this help");
         w.WriteLine();
         w.WriteLine("Examples:");

@@ -19,8 +19,7 @@ internal sealed class InteractiveSession
     private const string DetailIndent = "     ";
     private static readonly TimeSpan PlayingRedrawInterval = TimeSpan.FromMilliseconds(100);
 
-    private static readonly string Version =
-        typeof(InteractiveSession).Assembly.GetName().Version?.ToString(2) ?? "?";
+    private static readonly string Version = AppVersion.Display;
 
     private static readonly Dictionary<ConsoleKey, TeletextColor> ColorKeys = new()
     {

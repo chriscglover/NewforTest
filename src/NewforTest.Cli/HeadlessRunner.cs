@@ -18,6 +18,7 @@ internal static class HeadlessRunner
         int port = options.Port ?? CliOptions.DefaultPort;
         PageNumber page = options.Page ?? PageNumber.Parse(CliOptions.DefaultPage);
         SubtitleStyle style = options.Style;
+        Log($"NewforTest {AppVersion.Display}");
 
         // Check everything we can before connecting, so bad input never sends anything
         string[]? sendLines = null;
