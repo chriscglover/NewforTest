@@ -16,13 +16,13 @@ public enum VerticalPosition
 
 public enum Justification
 {
-    /// <summary>Text starts at column 10 (8 unboxed), the v3.4 layout.</summary>
+    /// <summary>Against the left edge: box from column 3, text from column 4 (column 2 unboxed).</summary>
     Left,
 
-    /// <summary>Text centred on the row.</summary>
+    /// <summary>Box (or unboxed text) centred on the row.</summary>
     Centre,
 
-    /// <summary>Mirror image of Left: the box ends 8 columns from the right edge.</summary>
+    /// <summary>Against the right edge: text ends in column 37, End Box codes in 38-39.</summary>
     Right,
 }
 

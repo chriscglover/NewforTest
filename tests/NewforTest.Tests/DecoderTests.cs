@@ -34,7 +34,7 @@ public class NewforPacketDecoderTests
         var lines = Describe(packet);
 
         Assert.Equal("BUILD row 20, clear screen", lines[0]);
-        Assert.StartsWith("row 20: {DH}     {SB}{SB}{Yellow} HELLO{EB}{EB}", lines[1]);
+        Assert.StartsWith("row 20: {DH}{Yellow}{SB}{SB}HELLO{EB}{EB}", lines[1]);
     }
 
     [Fact]
