@@ -14,9 +14,26 @@ public enum VerticalPosition
     Lower,
 }
 
-/// <summary>How a subtitle is drawn: colour, height, boxing and screen position.</summary>
+public enum Justification
+{
+    /// <summary>Text starts at column 10 (8 unboxed), the v3.4 layout.</summary>
+    Left,
+
+    /// <summary>Text centred on the row.</summary>
+    Centre,
+
+    /// <summary>Mirror image of Left: the box ends 8 columns from the right edge.</summary>
+    Right,
+}
+
+/// <summary>How a subtitle is drawn: colour, height, boxing, position and character set.</summary>
 public sealed record SubtitleStyle(
     TeletextColor Color = TeletextColor.White,
     bool DoubleHeight = false,
     bool Boxed = true,
-    VerticalPosition Position = VerticalPosition.Lower);
+    VerticalPosition Position = VerticalPosition.Lower,
+    Justification Justification = Justification.Left)
+{
+    /// <summary>Must match the national option the inserter uses for the page.</summary>
+    public TeletextCharacterSet CharacterSet { get; init; } = TeletextCharacterSet.English;
+}

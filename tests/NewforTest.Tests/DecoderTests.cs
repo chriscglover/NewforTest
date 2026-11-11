@@ -165,7 +165,7 @@ public class SubtitleTextTests
     [Fact]
     public void Accepts_lines_that_fit()
     {
-        var lines = new[] { new string('X', 28), "SHORT" };
+        var lines = new[] { new string('X', 34), "SHORT" };
         Assert.True(SubtitleText.TryValidate(lines, new SubtitleStyle(Boxed: true), out var error));
         Assert.Null(error);
     }
@@ -173,15 +173,15 @@ public class SubtitleTextTests
     [Fact]
     public void Reports_which_line_is_too_long()
     {
-        var lines = new[] { "FINE", new string('X', 29) };
+        var lines = new[] { "FINE", new string('X', 35) };
         Assert.False(SubtitleText.TryValidate(lines, new SubtitleStyle(Boxed: true), out var error));
-        Assert.Equal("Line 2 is 29 characters; at most 28 fit on a boxed row.", error);
+        Assert.Equal($"Line 2: \"{lines[1]}\" is 35 characters; at most 34 fit on a boxed row.", error);
     }
 
     [Fact]
-    public void Unboxed_rows_allow_32_characters()
+    public void Unboxed_rows_allow_38_characters()
     {
-        var lines = new[] { new string('X', 32) };
+        var lines = new[] { new string('X', 38) };
         Assert.False(SubtitleText.TryValidate(lines, new SubtitleStyle(Boxed: true), out _));
         Assert.True(SubtitleText.TryValidate(lines, new SubtitleStyle(Boxed: false), out _));
     }

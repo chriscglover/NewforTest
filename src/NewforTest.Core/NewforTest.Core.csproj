@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Protocol, teletext encoding and (later) subtitle file parsing.
+  <!-- Protocol, teletext encoding and subtitle file parsing.
        No console or UI code here: shared by the CLI and the Avalonia GUI. -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NewforTest.Tests" />
+  </ItemGroup>
 
 </Project>
