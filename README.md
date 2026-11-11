@@ -64,7 +64,7 @@ opens the console. Anything not given on the command line is prompted for.
 
 ### Linux
 
-Tested on Ubuntu 26.04 (x64) with the .NET 10 SDK:
+Built and tested on Ubuntu 26.04.1 (x64) with the .NET 10 SDK:
 - The solution builds and every test passes.
 - The console app's scripted modes and file playback were run against a live inserter.
 - The GUI starts and draws.
