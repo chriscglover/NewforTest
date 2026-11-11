@@ -3,6 +3,9 @@
 ###############################################################################
 * text=auto
 
+# EBU STL subtitle files are binary
+*.stl binary
+
 ###############################################################################
 # Set default behavior for command prompt diff.
 #
