@@ -54,10 +54,16 @@ internal sealed record CliOptions
 
     public double SoakSeconds { get; init; } = DefaultSoakSeconds;
 
+    /// <summary>
+    /// --hold: seconds to keep a --send subtitle up before clearing and disconnecting.
+    /// Null means until Ctrl+C. Many receivers clear the subtitle when the connection closes.
+    /// </summary>
+    public double? HoldSeconds { get; init; }
+
     private static readonly HashSet<string> ValueOptions = new()
     {
         "--ip", "--host", "--port", "--page", "--color", "--colour", "--pos", "--position",
-        "--justify", "--charset", "--send", "--play", "--load", "--start", "--soak",
+        "--justify", "--charset", "--send", "--play", "--load", "--start", "--soak", "--hold",
     };
 
     public static bool TryParse(
@@ -193,6 +199,15 @@ internal sealed record CliOptions
                     o = o with { File = value };
                     break;
 
+                case "--hold":
+                    if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double hold) || hold < 0)
+                    {
+                        error = $"'{value}' is not a valid hold time: expected seconds, 0 or more.";
+                        return false;
+                    }
+                    o = o with { HoldSeconds = hold };
+                    break;
+
                 case "--start":
                     o = o with { Start = value };
                     break;
@@ -213,6 +228,12 @@ internal sealed record CliOptions
         if (o.Mode == RunMode.Play && args.Contains("--load"))
         {
             error = "Use --play to play a file without the console, or --load to open it in the console; not both.";
+            return false;
+        }
+
+        if (o.HoldSeconds is not null && o.Mode != RunMode.Send)
+        {
+            error = "--hold only applies to --send.";
             return false;
         }
 
@@ -274,9 +295,12 @@ internal sealed record CliOptions
         w.WriteLine("                           (default english; must match the inserter)");
         w.WriteLine();
         w.WriteLine("Modes (default: interactive console):");
-        w.WriteLine("  --send \"<text>\"          Send one subtitle and exit; '|' separates lines");
+        w.WriteLine("  --send \"<text>\"          Send one subtitle; '|' separates lines. Stays up until Ctrl+C,");
+        w.WriteLine("                           then CLEAR and DISCONNECT");
+        w.WriteLine("  --hold <seconds>         With --send: keep it up this long, then exit (0 = exit at once;");
+        w.WriteLine("                           many receivers clear the subtitle when the connection closes)");
         w.WriteLine("  --clear                  Send CLEAR and exit");
-        w.WriteLine("  --play <file>            Play a subtitle file (.srt) without the console; Ctrl+C stops");
+        w.WriteLine("  --play <file>            Play a subtitle file (.srt, .stl) without the console; Ctrl+C stops");
         w.WriteLine("  --load <file>            Open the console with a subtitle file loaded");
         w.WriteLine("  --soak <seconds>         Cycle the test subtitles every N seconds until Ctrl+C");
         w.WriteLine("  --loop                   With --play/--load: repeat from the start");
@@ -287,7 +311,7 @@ internal sealed record CliOptions
         w.WriteLine("  -h, --help               Show this help");
         w.WriteLine();
         w.WriteLine("Examples:");
-        w.WriteLine("  NewforTest --ip 10.0.0.5 --page 888 --send \"HELLO|WORLD\" --color yellow --double");
+        w.WriteLine("  NewforTest --ip 10.0.0.5 --page 888 --send \"HELLO|WORLD\" --color yellow --double --hold 10");
         w.WriteLine("  NewforTest --ip 10.0.0.5 --play film.srt --justify centre --loop");
         w.WriteLine();
         w.WriteLine("Exit codes: 0 success, 1 connection failed, 2 bad arguments or file.");

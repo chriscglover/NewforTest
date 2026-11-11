@@ -84,6 +84,12 @@ internal static class HeadlessRunner
                 case RunMode.Send:
                     client.SendSubtitle(page, sendLines!, style);
                     Log($"Sent: {SubtitleText.Join(sendLines!)}");
+                    if (options.HoldSeconds is not 0)
+                    {
+                        Hold(options.HoldSeconds);
+                        client.Clear();
+                        Log("CLEAR sent.");
+                    }
                     return ExitCodes.Success;
 
                 case RunMode.Clear:
@@ -163,6 +169,35 @@ internal static class HeadlessRunner
 
         Log(exitCode == ExitCodes.Success ? "Playback stopped." : "Playback stopped: connection lost.");
         return exitCode;
+    }
+
+    /// <summary>Waits for the given number of seconds, or until Ctrl+C if null.</summary>
+    private static void Hold(double? seconds)
+    {
+        using var done = new ManualResetEventSlim();
+        ConsoleCancelEventHandler onCancel = (_, e) =>
+        {
+            e.Cancel = true;
+            done.Set();
+        };
+        Console.CancelKeyPress += onCancel;
+        try
+        {
+            if (seconds is null)
+            {
+                Log("Subtitle is up. Ctrl+C to clear it and disconnect.");
+                done.Wait();
+            }
+            else
+            {
+                Log($"Holding for {seconds:0.###} s (Ctrl+C to stop early).");
+                done.Wait(TimeSpan.FromSeconds(seconds.Value));
+            }
+        }
+        finally
+        {
+            Console.CancelKeyPress -= onCancel;
+        }
     }
 
     /// <summary>Lists cues that won't fit with this style. Returns how many.</summary>
