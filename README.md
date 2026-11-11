@@ -1,172 +1,394 @@
-﻿# Newfor CLI
+﻿# NewforTest
 
-A command-line tool for injecting teletext subtitles using the Newfor protocol over TCP/IP.
+Tools for testing teletext subtitle inserters that use the **Newfor** protocol over TCP/IP. NewforTest sends test subtitles, your own text, or whole **SRT** and **EBU STL** files to an inserter, timed to the frame, and shows exactly what it sent.
 
-## Overview
+There are two apps, built on the same core:
 
-Newfor CLI is a .NET console application that sends subtitles to teletext subtitle inserters using the Newfor protocol. It provides an interactive interface for testing subtitle transmission with various formatting options.
+| App | Use it for |
+|-----|-----------|
+| **NewforTestGui** | Everyday testing: a live teletext preview, style controls, file playback with a cue list, and a packet log. |
+| **NewforTest** | The console (keyboard-driven), plus scripted modes (`--send`, `--play`, `--soak`) for automation and CI. |
 
-## Features
+Version 4.0. MIT licensed.
 
-- **Newfor Protocol Support**: Full implementation of the Newfor protocol including CONNECT, BUILD, REVEAL, CLEAR, and DISCONNECT commands
-- **Multiple Subtitle Lines**: Support for 1, 2, or 3 line subtitles
-- **Text Colours**: Red, Green, Yellow, Blue, Magenta, Cyan, and White
-- **Height Modes**: Single height (0x0C) and Double height (0x0D)
-- **Boxing**: Optional teletext box background for improved readability
-- **Vertical Positioning**: Top, Middle, or Lower screen positions
-- **Hamming 8/4 Encoding**: Correct encoding for row numbers and control data
-- **Odd Parity**: Proper parity bit handling for teletext transmission
+---
 
-## Requirements
+## Contents
 
-- .NET 6.0 or later
-- Network connectivity to a Newfor-compatible subtitle inserter
+- [Getting started](#getting-started)
+- [The GUI](#the-gui)
+- [The console app](#the-console-app)
+- [Scripted use](#scripted-use)
+- [Subtitle files](#subtitle-files)
+- [Layout: rows, justification and boxes](#layout-rows-justification-and-boxes)
+- [Character sets](#character-sets)
+- [Receiver behaviour worth knowing](#receiver-behaviour-worth-knowing)
+- [Protocol implementation](#protocol-implementation)
+- [Building, testing and publishing](#building-testing-and-publishing)
+- [Project structure](#project-structure)
+- [Version history](#version-history)
+- [Licence and acknowledgements](#licence-and-acknowledgements)
 
-## Building
+---
 
-```bash
-dotnet build
+## Getting started
+
+### Requirements
+
+- **Running:** the released Windows x64 exes are self-contained single files, so no .NET install is needed.
+- **Building:** the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+- **A Newfor inserter** on the network, and the teletext subtitle page it carries (usually **888**).
+
+The GUI uses [Avalonia](https://avaloniaui.net/), so it can also be built for Linux and macOS. Only Windows has been tested.
+
+### Quick start
+
+1. Run **NewforTestGui.exe**.
+2. Enter the inserter's address, port and page, then press **Connect**.
+3. Press **1 line**, **2 lines** or **3 lines** to send a test subtitle, or type your own text and press **Send text**.
+4. To play a file, press **Open file...** (or drop an `.srt` or `.stl` file on the window), then **Play**.
+
+You can do all of this before connecting. When not connected, everything goes to the preview only, so you can check styles, text and whole files without a receiver.
+
+From a command prompt:
+
+```
+NewforTest --ip 10.0.0.5 --page 888
 ```
 
-## Usage
+opens the console. Anything not given on the command line is prompted for.
 
-### Command Line Arguments
+---
 
-```bash
-NewforCli [--ip <address>] [--port <port>] [--page <page>]
+## The GUI
+
+The window has the connection bar along the top, the preview, file controls and cue list on the left, style and send controls on the right, and the log along the bottom.
+
+| Area | What it does |
+|------|--------------|
+| **Connection bar** | Inserter address, port and page. The page is checked as you type (magazine 1–8, e.g. `888` or `1FF`); an invalid page blocks sending. **Connect** / **Disconnect**, and the connection status. |
+| **Preview** | Draws what the inserter has been sent, decoded from the actual bytes, over a grey picture. Shows boxes, colours, double height, row numbers and the page. Only boxed cells get a background, as on a subtitle decoder. |
+| **Colour / Style** | Text colour, box, double height, position (top, middle, lower), justification (left, centre, right) and character set. Changes apply to the next subtitle sent, including during file playback. |
+| **Test subtitles** | The built-in 1, 2 and 3 line subtitles, and **Clear**. |
+| **Custom text** | One subtitle line per text line. Checked as you type against the line limit (34 characters boxed, 38 unboxed). |
+| **Soak test** | Cycles the 1, 2 and 3 line test subtitles every *N* seconds until stopped. |
+| **File** | Open or drop `.srt` / `.stl`. **Play/Pause**, **Stop** (clears the screen), **Prev** / **Next** cue, **Loop**, **Follow** (keep the cue on screen selected), and the timecode. Cues that can't be shown with the current style are orange; hover for the reason. Double-click a cue to go to it. |
+| **Log** | Everything sent, file warnings and errors. **Hex dump** adds each packet, decoded (e.g. `BUILD row 22, clear screen` and the row's text with control codes) and as hex. **Copy** puts the log on the clipboard. |
+
+**Keyboard shortcuts**
+
+| Key | Action |
+|-----|--------|
+| F5 | Play / pause |
+| F6 | Stop |
+| Ctrl+← / Ctrl+→ | Previous / next cue |
+| Ctrl+O | Open file |
+| F9 | Clear the screen |
+| Ctrl+Enter | Send custom text (in the text box) |
+
+Settings (address, page, style, custom text and so on) are remembered between runs in `%AppData%\NewforTest\gui-settings.json`.
+
+---
+
+## The console app
+
+Run `NewforTest` with no mode option for the keyboard-driven console. The screen shows the menu, the current style, the loaded file and a scrolling log.
+
+| Key | Action |
+|-----|--------|
+| **Colour** | |
+| R G Y B M A W | Red, green, yellow, blue, magenta, cyan (A), white |
+| **Style** | |
+| X | Box on/off |
+| H | Double height on/off |
+| J | Justification: left → centre → right |
+| I | Character set (cycles through the national options) |
+| T / N / L | Position: top, middle, lower |
+| **Send** | |
+| 1 / 2 / 3 | Send the 1, 2 or 3 line test subtitle |
+| E | Enter your own text (`\|` between lines) and send it |
+| 4 | Send your text again |
+| C | Clear the screen |
+| **File** | |
+| F | Load an `.srt` or `.stl` file (you can drag it into the console) |
+| Space | Play / pause |
+| S | Stop (clears the screen) |
+| ← / → | Previous / next cue |
+| G | Go to a timecode (`HH:MM:SS:FF`) or cue (`#123`) |
+| K | Loop on/off |
+| U | Soak test |
+| **Other** | |
+| P | Change page |
+| O | Reconnect |
+| V | Hex dump on/off |
+| PgUp / PgDn / Home / End | Scroll the log |
+| Q or Ctrl+C | Quit (stops playback, clears, sends DISCONNECT) |
+
+If the inserter isn't reachable at startup, the console still opens; press **O** to connect when it's ready.
+
+---
+
+## Scripted use
+
+The same `NewforTest` exe runs without the console when given a mode option. Nothing is prompted for; anything not given uses its default. Logs go to stdout, errors to stderr.
+
+```
+NewforTest 4.0 - Newfor teletext subtitle test injector
+
+Usage: NewforTest [connection] [style] [mode]
+
+Connection:
+  --ip, --host <address>   Subtitle inserter address   (default 127.0.0.1)
+  --port <port>            TCP port, 1-65535            (default 1234)
+  --page <page>            Teletext page, e.g. 888, 1FF (default 888)
+
+Style:
+  --color <colour>         red, green, yellow, blue, magenta, cyan, white (default white)
+  --double                 Double height
+  --no-box                 No box
+  --pos <position>         top, middle or lower (default lower)
+  --justify <justify>      left, centre or right (default left)
+  --charset <set>          english, french, german, italian, portuguese, swedish
+                           (default english; must match the inserter)
+
+Modes (default: interactive console):
+  --send "<text>"          Send one subtitle; '|' separates lines. Stays up until Ctrl+C,
+                           then CLEAR and DISCONNECT
+  --hold <seconds>         With --send: keep it up this long, then exit (0 = exit at once;
+                           many receivers clear the subtitle when the connection closes)
+  --clear                  Send CLEAR and exit
+  --play <file>            Play a subtitle file (.srt, .stl) without the console; Ctrl+C stops
+  --load <file>            Open the console with a subtitle file loaded
+  --soak <seconds>         Cycle the test subtitles every N seconds until Ctrl+C
+  --loop                   With --play/--load: repeat from the start
+  --start <timecode>       With --play/--load: start position, e.g. 00:01:30:00 or 90
+
+Other:
+  --hex                    Show every packet sent as a decoded hex dump
+  -v, --version            Show the version
+  -h, --help               Show this help
+
+Exit codes: 0 success, 1 connection failed, 2 bad arguments or file.
 ```
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--ip` | IP address of the subtitle inserter | 127.0.0.1 |
-| `--port` | TCP port number | 1234 |
-| `--page` | Teletext page number | 888 |
+**Examples**
 
-### Interactive Controls
+```
+# Yellow, double height, centred, held for 10 seconds
+NewforTest --ip 10.0.0.5 --page 888 --send "HELLO|WORLD" --color yellow --double --justify centre --hold 10
 
-Once connected, use the following keyboard controls:
+# Play a file from 10:01:30:00, looping, with every packet logged
+NewforTest --ip 10.0.0.5 --play programme.stl --start 10:01:30:00 --loop --hex
 
-#### Colour Selection
-| Key | Colour |
-|-----|--------|
-| R | Red |
-| G | Green |
-| Y | Yellow |
-| B | Blue |
-| M | Magenta |
-| A | Cyan |
-| W | White |
+# Overnight soak test: a test subtitle every 3 seconds
+NewforTest --ip 10.0.0.5 --soak 3 > soak.log
+```
 
-#### Options
-| Key | Action |
-|-----|--------|
-| X | Toggle box on/off |
-| H | Toggle double height on/off |
+Input is checked **before** connecting, so a bad page, a line that's too long or an unreadable file never sends anything (exit code 2). During playback each cue is logged with how late it went out, typically well under a millisecond.
 
-#### Vertical Position
-| Key | Position |
-|-----|----------|
-| T | Top (rows 2-4) |
-| N | Middle (centred around row 12) |
-| L | Lower (ending at row 22) |
+---
 
-#### Subtitle Transmission
-| Key | Action |
-|-----|--------|
-| 1 | Send single line subtitle |
-| 2 | Send two line subtitle |
-| 3 | Send three line subtitle |
+## Subtitle files
 
-#### Other Actions
-| Key | Action |
-|-----|--------|
-| C | Clear subtitle display |
-| P | Change teletext page |
-| Q | Quit (sends DISCONNECT) |
+Files are recognised by content as well as extension. Warnings (skipped cues, unusual headers and so on) are shown when a file is loaded.
 
-## Protocol Implementation
+### SRT (SubRip)
 
-### Packet Types
+- **Tolerant parsing:** handles missing or wrong cue numbers, `.` instead of `,` before the milliseconds, extra text after the timing, missing blank lines between cues, CR/LF or LF line endings, and UTF-8, UTF-16 or Latin-1 encoding.
+- **Colour:** `<font color="...">` becomes teletext colour (named colours or `#RRGGBB`, matched to the nearest of the seven teletext colours), including colour changes within a line.
+- **Position:** `{\anN}` sets the position (top, middle or lower) and justification.
+- **Other markup:** `<i>`, `<b>`, `<u>` and other tags are dropped, because teletext can't show them. HTML entities are decoded.
+- **Problem cues:** cues with no text, or that end before they start, are skipped with a warning. Out-of-order cues are sorted.
+- **Programme start:** playback starts at 00:00:00.
 
-| Command | Code | Description |
-|---------|------|-------------|
-| CONNECT | 0x0E | Establishes connection and sets page |
-| BUILD | 0x8F | Sends subtitle row data (0x0F with parity) |
-| REVEAL | 0x10 | Displays the buffered subtitle |
-| CLEAR | 0x98 | Clears the subtitle display (0x18 with parity) |
+### EBU STL (EBU Tech 3264)
 
-### Transmission Sequence
+- **Teletext files** (display standard 1 or 2): each row keeps its authored control codes (colours, double height, boxing, backgrounds) and its row number. The row number is the vertical position plus one per CR/LF, so double-height lines separated by two CR/LFs land two rows apart.
+- **Justification:** code 0 keeps the authored layout. Codes 1–3 re-justify left, centre or right, using the full row width.
+- **Characters:** text is decoded from ISO 6937 (character code table 00, including two-byte accented letters), then re-encoded for the selected teletext character set when sent. Note that ISO 6937 and teletext put characters such as `#`, `$` and `£` in different places.
+- **Skipped blocks:**
+  - Extension blocks are joined.
+  - User data, reserved and comment blocks are skipped.
+  - "Subtitle zero" (programme information at 00:00:00:00) is skipped.
+  - If the file has several subtitle groups (usually languages), only the first is played.
+- **Cumulative subtitles** carry the earlier rows of their set forward.
+- **Frame rate** comes from the disk format code: `STL25.01`, `STL30.01` (treated as exactly 30 fps), and non-standard codes such as `STL50.01`.
+- **Programme start:** playback starts at the programme start timecode (TCP). If that is missing or doesn't match the subtitles, it starts 2 seconds before the first subtitle.
+- **Rows over 40 bytes:** trailing control codes past column 40 are dropped. Real broadcast files often put the second End Box in column 41, which has no visible effect.
+- **Open-subtitle files** (display standard 0 or blank) are played as plain text using the current style.
+- **Not supported:** character code tables 01–04 (Cyrillic, Arabic, Greek, Hebrew). These load with a warning, but non-ASCII characters will be wrong.
 
-1. **CONNECT** - Set the target teletext page
-2. **CLEAR** - Clear any existing subtitle
-3. **BUILD** - Send each subtitle row (first row with clear bit set)
-4. **REVEAL** - Display the subtitle on screen
+The parser has been checked against all 108 STL test files from IRT's [Subtitle Conversion Framework](https://github.com/IRT-Open-Source/scf), and against a set of 58 UK broadcast files (157,192 cues, all playable).
 
-### Row Encoding
+---
 
-Row numbers are encoded as two Hamming 8/4 bytes representing the hexadecimal nibbles of the row number:
-- Row 22 (0x16): Hamming(1), Hamming(6) → 0x02, 0x38
-- Row 20 (0x14): Hamming(1), Hamming(4) → 0x02, 0x64
+## Layout: rows, justification and boxes
 
-### WST Control Codes
+### Rows
 
-| Code | Description |
-|------|-------------|
-| 0x0A | End Box |
-| 0x0B | Start Box |
-| 0x0C | Normal Height |
-| 0x0D | Double Height |
+Text and SRT subtitles are placed by the **position** setting, with two rows between lines. That leaves room for double height, and a blank row between single-height lines.
 
-## Row Layout
+| Lines | Lower | Middle | Top |
+|-------|-------|--------|-----|
+| 1 | 22 | 11 | 2 |
+| 2 | 20, 22 | 10, 12 | 2, 4 |
+| 3 | 18, 20, 22 | 9, 11, 13 | 2, 4, 6 |
 
-Subtitles use a spacing of 2 rows between lines for readability:
+Row 22 is the lowest row used: a double-height line there also fills row 23, and some receivers don't show subtitles on row 23. Up to 11 lines fit. EBU STL rows use their own row numbers (1–23).
 
-**Single Line (Lower position)**
-- Line 1: Row 22
+### Row layout
 
-**Two Lines (Lower position)**
-- Line 1: Row 20
-- Line 2: Row 22
+```
+[height] [spaces] [colour] [Start Box][Start Box] text [End Box][End Box] [padding]
+```
 
-**Three Lines (Lower position)**
-- Line 1: Row 18
-- Line 2: Row 20
-- Line 3: Row 22
+Start Box and End Box both take effect *after* their own cell, so the box shows **one cell of margin** each side of the text. The spaces set the justification:
 
-## License
+| | Boxed | Unboxed |
+|---|---|---|
+| **Left** | box against the left edge (text from column 4) | text from column 2 |
+| **Centre** | box centred on the row | text centred |
+| **Right** | box against the right edge (End Box in columns 38–39) | text ends in column 39 |
 
-MIT License
+At most **34 characters** fit on a boxed row and **38** unboxed. A colour change within a line takes one cell, reusing an adjacent space where there is one. Text that doesn't fit is rejected with a clear message rather than cut off.
 
-Copyright (c) 2026 Christopher Glover
+---
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## Character sets
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The teletext national option (which characters appear at positions such as `0x23` and `0x5B`) is set on the inserter for the page. It is not sent by Newfor, so choose the matching set in NewforTest:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+**English** (default), **French**, **German**, **Italian**, **Portuguese/Spanish**, **Swedish/Finnish/Hungarian**.
 
-## Version History
+Characters not in the selected set are converted where possible:
+- Curly quotes become straight quotes, an ellipsis becomes `...`, and dashes become `-` (or the teletext `―` where the set has it).
+- Accented letters lose their accent (`é` → `e` in English).
 
-- **3.4** - Use named constants for protocol commands
-- **3.3** - Remove unused methods
-- **3.2** - Fixed row spacing for single height subtitles
-- **3.1** - Added NormalHeight (0x0C) control code for single height mode
-- **3.0** - Always include height control code at start of each line
-- **2.x** - Protocol fixes for row encoding, parity, and packet structure
+Anything else is sent as `?` and reported.
 
-## Acknowledgements
+---
 
-- Newfor protocol specification by AXON
-- Compatible with FAB Subtitler and similar teletext inserters
+## Receiver behaviour worth knowing
+
+- **Disconnecting clears the subtitle on some receivers.** The receiver this was tested against shows a subtitle only while the connection is open: a DISCONNECT, or simply closing the TCP connection, clears it. That's why `--send` holds the connection until Ctrl+C or `--hold <seconds>`.
+- **Unboxed text** is shown by some decoders but not by others. On a TV in subtitle mode only boxed text is normally visible.
+- **No acknowledgements:** the receiver doesn't reply to Newfor packets, so a send that "succeeds" only means the bytes reached it. Use a decoder or monitor to see the result.
+
+---
+
+## Protocol implementation
+
+### Packets
+
+| Packet | Bytes | Description |
+|--------|-------|-------------|
+| CONNECT | `0E 00 H(mag) H(tens) H(units)` | Selects the page. H() = Hamming 8/4. |
+| BUILD | `8F H(data) {H(row hi) H(row lo) [40 bytes]}` | Row data. The data byte holds the clear-screen bit (bit 3) and the row count. `0x8F` is `0x0F` with odd parity. |
+| REVEAL | `10` | Displays the rows built so far. |
+| CLEAR | `98` | Clears the display (`0x18` with odd parity). |
+| DISCONNECT | `0E 00 C7 C7 C7` | CONNECT to the illegal page 999. Ends the session. |
+
+### Sending a subtitle
+
+As FAB Subtitler does: **CONNECT** → **CLEAR** → one **BUILD** per row (the first with the clear-screen bit set) → **REVEAL**. A subtitle's packets are always sent together, even when playback and manual sends happen at once.
+
+### Encoding
+
+- **Row numbers** are two Hamming 8/4 bytes holding the row's hex nibbles. Row 22 (`0x16`) → `H(1) H(6)` = `02 38`; row 20 (`0x14`) → `02 64`.
+- **Row data** is exactly 40 bytes, each with odd parity. Unused cells are padded with `0xA0`.
+- **Padding byte:** `0xA0` has *even* parity, unlike the rest of the row. It is kept because v3.4's output was matched to FAB Subtitler. The hex dump flags it, so it can be compared against a FAB capture.
+
+### WST control codes used
+
+| Code | Meaning |
+|------|---------|
+| `0x01`–`0x07` | Text colour: red, green, yellow, blue, magenta, cyan, white |
+| `0x0A` | End Box |
+| `0x0B` | Start Box (sent twice) |
+| `0x0C` | Normal height |
+| `0x0D` | Double height |
+
+EBU STL files may also use others (flash, steady, new background, black background); these are sent as authored, and the preview shows them.
+
+---
+
+## Building, testing and publishing
+
+```
+dotnet build NewforTest.sln
+dotnet test NewforTest.sln
+```
+
+The tests (311) cover:
+- Hamming and parity encoding, and packet framing.
+- Complete byte sequences for known subtitles ("golden" tests). These fail if anything sent on the wire changes.
+- Row layout and justification.
+- The SRT and EBU STL parsers.
+- The real-time player, against a loopback socket.
+- The teletext screen model.
+- The GUI, run headless with real rendering. Set `NEWFORTEST_SCREENSHOTS=<folder>` to save a screenshot of the main window.
+
+**Self-contained single-file exes** (Windows x64, no .NET needed to run):
+
+```
+dotnet publish src/NewforTest.Cli -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded -o <folder>
+dotnet publish src/NewforTest.Gui -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded -o <folder>
+```
+
+The version is set once, in `<Version>` in [Directory.Build.props](Directory.Build.props). Both apps and the exe file properties report it, and a test checks they agree.
+
+---
+
+## Project structure
+
+```
+src/
+  NewforTest.Core/   Protocol, teletext encoding, layout, SRT and EBU STL parsers, the real-time
+                     player and the teletext screen model. No UI code; shared by both apps.
+  NewforTest.Cli/    NewforTest.exe: the console and the scripted modes.
+  NewforTest.Gui/    NewforTestGui.exe: the Avalonia GUI.
+tests/
+  NewforTest.Tests/      Core and protocol tests.
+  NewforTest.Gui.Tests/  Headless GUI tests.
+```
+
+---
+
+## Version history
+
+- **4.0**
+  - Rebuilt as a solution:
+    - a shared core;
+    - an **Avalonia GUI**, with a teletext preview drawn from the bytes sent, offline rehearsal, a cue list and a packet log;
+    - the console app.
+  - **SRT and EBU STL playback**, timed to within about a millisecond, with play/pause/seek/loop and a soak test.
+  - **Scripted modes:** `--send`, `--clear`, `--play`, `--soak`, with exit codes.
+  - **Layout:**
+    - left/centre/right justification using the full row width;
+    - one cell of box margin each side;
+    - up to 34 characters per boxed row (38 unboxed);
+    - colour changes within a line.
+  - **Teletext national character sets.** Typographic characters are converted.
+  - **Hex dump** with packet decoding. Custom text.
+  - **Robustness:**
+    - pages and arguments are checked before anything is sent;
+    - a dropped connection is reported, and you can reconnect;
+    - Ctrl+C sends DISCONNECT;
+    - text that doesn't fit is rejected instead of truncated.
+  - Targets **.NET 10**. Released as self-contained single-file exes.
+- **3.4**: named constants for protocol commands.
+- **3.3**: removed unused methods.
+- **3.2**: fixed row spacing for single height subtitles.
+- **3.1**: added NormalHeight (0x0C) control code for single height mode.
+- **3.0**: always include the height control code at the start of each line.
+- **2.x**: protocol fixes for row encoding, parity and packet structure.
+
+---
+
+## Licence and acknowledgements
+
+MIT Licence, Copyright (c) 2026 Christopher Glover. See [LICENSE.txt](LICENSE.txt).
+
+- Newfor protocol specification by AXON. Compatible with FAB Subtitler and similar teletext inserters.
+- The EBU STL parser was checked against the test files and reference decoder from IRT's [Subtitle Conversion Framework](https://github.com/IRT-Open-Source/scf) (Apache 2.0). The test files are not included in this repository.
+- GUI built with [Avalonia](https://avaloniaui.net/) and the [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet).
