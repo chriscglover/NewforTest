@@ -206,8 +206,10 @@ public static class SubtitleRowBuilder
                 .Concat(lead).Concat(text).Concat(trail).ToList();
         }
 
-        // Trailing spaces beyond column 40 are harmless; anything else is an authoring error
-        while (bytes.Count > Teletext.RowLength && bytes[^1] == Teletext.Space)
+        // Trailing spaces or control codes beyond column 40 change nothing visible (a box ends at the
+        // edge of the row anyway), and real STL files often have a second End Box in column 41.
+        // Only text that would be cut off is an error.
+        while (bytes.Count > Teletext.RowLength && bytes[^1] <= Teletext.Space)
             bytes.RemoveAt(bytes.Count - 1);
 
         if (bytes.Count > Teletext.RowLength)
