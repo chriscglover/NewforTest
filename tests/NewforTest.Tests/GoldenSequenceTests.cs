@@ -10,8 +10,8 @@ namespace NewforTest.Tests;
 /// </summary>
 /// <remarks>
 /// History: the packet framing (CONNECT, CLEAR, BUILD headers and row numbers, REVEAL) was
-/// captured from v3.4, whose output matched FAB Subtitler, and is unchanged. In 4.0 the row
-/// layout changed at the user's request: the colour code now comes before the Start Box codes
+/// captured from v3.4, whose output works on a real inserter (Grass Valley ICE), and is
+/// unchanged. In 4.0 the row layout changed at the user's request: the colour code now comes before the Start Box codes
 /// (as in broadcast STL files) so the box has one cell of margin each side, and Left/Right
 /// justification use the edges of the row. The decoded rows are shown above each case.
 /// </remarks>

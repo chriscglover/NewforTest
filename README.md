@@ -11,7 +11,7 @@ There are two apps, built on the same core:
 | **NewforTestGui** | Everyday testing: a live teletext preview, style controls, file playback with a cue list, and a packet log. |
 | **NewforTest** | The console (keyboard-driven), plus scripted modes (`--send`, `--play`, `--soak`) for automation and CI. |
 
-Version 4.0. MIT licensed.
+Version 4.1. MIT licensed.
 
 ---
 
@@ -156,7 +156,7 @@ If the inserter isn't reachable at startup, the console still opens; press **O**
 The same `NewforTest` exe runs without the console when given a mode option. Nothing is prompted for; anything not given uses its default. Logs go to stdout, errors to stderr.
 
 ```
-NewforTest 4.0 - Newfor teletext subtitle test injector
+NewforTest 4.1 - Newfor teletext subtitle test injector
 
 Usage: NewforTest [connection] [style] [mode]
 
@@ -418,6 +418,10 @@ tests/
 
 ## Version history
 
+- **4.1**
+  - **Soak test STL files:** [NewforTest-soak.stl](NewforTest-soak.stl) (every text and box colour, box off, both heights, 1-3 lines at all 9 positions; 3,024 self-describing subtitles) and [NewforTest-soak-sample.stl](NewforTest-soak-sample.stl) (20 subtitles, one of each kind). They play in either app or in any STL playout, and can be loaded into hardware inserters.
+  - **tools/SoakStlGenerator** rebuilds them and checks every subtitle with the app's own STL parser.
+  - The apps are unchanged from 4.0 apart from the version number.
 - **4.0**
   - Rebuilt as a solution:
     - a shared core;
