@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = $"Newfor Test {AppVersion.Display}";
 
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
