@@ -66,15 +66,4 @@ public class TeletextTests
             Assert.Equal(v & 0x7F, result & 0x7F);
         }
     }
-
-    [Theory]
-    [InlineData('A', 0x41)]
-    [InlineData(' ', 0x20)]
-    [InlineData('~', 0x7E)]
-    [InlineData('£', 0x23)]
-    [InlineData('é', 0x3F)] // not yet mapped -> '?'
-    [InlineData('\n', 0x3F)] // control characters must not reach the row as attributes
-    [InlineData('\u000B', 0x3F)]
-    public void EncodeCharacter_maps_to_7_bit_codes(char c, int expected) =>
-        Assert.Equal((byte)expected, Teletext.EncodeCharacter(c));
 }

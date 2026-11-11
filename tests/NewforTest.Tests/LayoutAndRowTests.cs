@@ -42,8 +42,8 @@ public class SubtitleLayoutTests
 public class SubtitleRowBuilderTests
 {
     [Theory]
-    [InlineData(true, 28)]
-    [InlineData(false, 32)]
+    [InlineData(true, 34)]
+    [InlineData(false, 38)]
     public void Max_text_length_depends_on_boxing(bool boxed, int expected) =>
         Assert.Equal(expected, SubtitleRowBuilder.MaxTextLength(boxed));
 
@@ -66,15 +66,15 @@ public class SubtitleRowBuilderTests
     {
         string text = new('X', SubtitleRowBuilder.MaxTextLength(boxed: true) + 1);
         var ex = Assert.Throws<ArgumentException>(() => SubtitleRowBuilder.Build(text, new SubtitleStyle(Boxed: true)));
-        Assert.Contains("28", ex.Message);
+        Assert.Contains("at most 34", ex.Message);
     }
 
     [Fact]
     public void FitText_shortens_only_when_needed()
     {
         Assert.Equal("SHORT", SubtitleRowBuilder.FitText("SHORT", boxed: true));
-        Assert.Equal(28, SubtitleRowBuilder.FitText(new string('X', 40), boxed: true).Length);
-        Assert.Equal(32, SubtitleRowBuilder.FitText(new string('X', 40), boxed: false).Length);
+        Assert.Equal(34, SubtitleRowBuilder.FitText(new string('X', 40), boxed: true).Length);
+        Assert.Equal(38, SubtitleRowBuilder.FitText(new string('X', 40), boxed: false).Length);
     }
 
     [Fact]

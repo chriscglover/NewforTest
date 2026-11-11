@@ -13,25 +13,32 @@ public static class SubtitleText
 
     public static string Join(IEnumerable<string> lines) => string.Join(LineSeparator, lines);
 
-    /// <summary>Checks the lines will fit on screen with the given style.</summary>
+    public static string Join(IEnumerable<SubtitleLine> lines) => Join(lines.Select(l => l.ToPlainText()));
+
+    public static IReadOnlyList<SubtitleLine> ToLines(IEnumerable<string> lines) =>
+        lines.Select(text => SubtitleLine.Text(text)).ToArray();
+
+    /// <summary>Checks plain text lines will fit on screen with the given style.</summary>
     public static bool TryValidate(
         IReadOnlyList<string> lines,
         SubtitleStyle style,
+        [NotNullWhen(false)] out string? error) =>
+        TryValidate(ToLines(lines), style, out error);
+
+    /// <summary>Checks the lines will fit on screen with the given style.</summary>
+    public static bool TryValidate(
+        IReadOnlyList<SubtitleLine> lines,
+        SubtitleStyle style,
         [NotNullWhen(false)] out string? error)
     {
-        if (lines.Count is < 1 or > SubtitleLayout.MaxLines)
-        {
-            error = $"A subtitle must have 1-{SubtitleLayout.MaxLines} lines, not {lines.Count}.";
+        if (!SubtitleLayout.TryGetRows(lines, style.Position, out _, out error))
             return false;
-        }
 
-        int max = SubtitleRowBuilder.MaxTextLength(style.Boxed);
         for (int i = 0; i < lines.Count; i++)
         {
-            if (lines[i].Length > max)
+            if (!SubtitleRowBuilder.TryBuild(lines[i], style, out _, out string? rowError))
             {
-                error = $"Line {i + 1} is {lines[i].Length} characters; at most {max} fit on " +
-                        $"{(style.Boxed ? "a boxed" : "an unboxed")} row.";
+                error = lines.Count == 1 ? rowError : $"Line {i + 1}: {rowError}";
                 return false;
             }
         }

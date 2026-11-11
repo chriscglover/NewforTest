@@ -12,12 +12,14 @@ public sealed class NewforConnectionException : Exception
 
 /// <summary>
 /// Sends Newfor packets to a subtitle inserter over TCP. Reports failures by throwing
-/// <see cref="NewforConnectionException"/>; writes nothing to the console.
+/// <see cref="NewforConnectionException"/>; writes nothing to the console. Thread-safe:
+/// each call's packets go out together.
 /// </summary>
 public sealed class NewforClient : IDisposable
 {
     public static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(5);
 
+    private readonly object _sync = new();
     private TcpClient? _tcp;
     private NetworkStream? _stream;
 
@@ -39,6 +41,12 @@ public sealed class NewforClient : IDisposable
     /// <summary>Opens the TCP connection, closing any existing one first.</summary>
     /// <exception cref="NewforConnectionException">Connection refused, unreachable or timed out.</exception>
     public void Connect(TimeSpan? timeout = null)
+    {
+        lock (_sync)
+            ConnectLocked(timeout);
+    }
+
+    private void ConnectLocked(TimeSpan? timeout)
     {
         Close();
 
@@ -67,50 +75,74 @@ public sealed class NewforClient : IDisposable
     /// Sends a complete subtitle. All packets are built (and validated) before anything is
     /// written, so bad input never leaves a half-sent subtitle on the inserter.
     /// </summary>
-    public void SendSubtitle(PageNumber page, IReadOnlyList<string> lines, SubtitleStyle style)
+    public void SendSubtitle(PageNumber page, IReadOnlyList<string> lines, SubtitleStyle style) =>
+        Send(NewforPackets.Subtitle(page, lines, style));
+
+    /// <inheritdoc cref="SendSubtitle(PageNumber, IReadOnlyList{string}, SubtitleStyle)"/>
+    public void SendSubtitle(PageNumber page, IReadOnlyList<SubtitleLine> lines, SubtitleStyle style) =>
+        Send(NewforPackets.Subtitle(page, lines, style));
+
+    /// <summary>
+    /// Writes a sequence of packets with nothing else in between, even if another thread
+    /// (e.g. a <see cref="SubtitlePlayer"/>) is sending at the same time.
+    /// </summary>
+    public void Send(IEnumerable<NewforPacket> packets)
     {
-        foreach (var packet in NewforPackets.Subtitle(page, lines, style))
-            Write(packet);
+        lock (_sync)
+        {
+            foreach (var packet in packets)
+                Write(packet);
+        }
     }
 
-    public void Clear() => Write(NewforPackets.Clear());
+    public void Clear() => Send(new[] { NewforPackets.Clear() });
 
     /// <summary>Sends DISCONNECT and closes the connection. Does nothing if not connected.</summary>
     public void Disconnect()
     {
-        if (!IsConnected)
-            return;
-        try
+        lock (_sync)
         {
-            Write(NewforPackets.Disconnect());
-        }
-        finally
-        {
-            Close();
+            if (!IsConnected)
+                return;
+            try
+            {
+                Write(NewforPackets.Disconnect());
+            }
+            finally
+            {
+                Close();
+            }
         }
     }
 
     /// <summary>Writes one packet. Exposed so callers can send individual packets for protocol testing.</summary>
     public void Write(NewforPacket packet)
     {
-        if (_stream is null)
-            throw new NewforConnectionException("Not connected.");
-
-        try
+        lock (_sync)
         {
-            _stream.Write(packet.Bytes);
-        }
-        catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
-        {
-            Close();
-            throw new NewforConnectionException($"Connection to {Host}:{Port} lost: {ex.Message}", ex);
-        }
+            if (_stream is null)
+                throw new NewforConnectionException("Not connected.");
 
-        PacketSent?.Invoke(packet);
+            try
+            {
+                _stream.Write(packet.Bytes);
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+            {
+                Close();
+                throw new NewforConnectionException($"Connection to {Host}:{Port} lost: {ex.Message}", ex);
+            }
+
+            PacketSent?.Invoke(packet);
+        }
     }
 
     /// <summary>Closes the socket without sending DISCONNECT.</summary>
-    public void Dispose() => Close();
+    public void Dispose()
+    {
+        lock (_sync)
+            Close();
+    }
 
     private void Close()
     {

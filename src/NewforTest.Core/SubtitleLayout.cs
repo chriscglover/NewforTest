@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Christopher Glover. MIT License - see LICENSE.txt.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace NewforTest.Core;
 
 /// <summary>Works out which display rows a subtitle's lines go on.</summary>
@@ -44,5 +46,57 @@ public static class SubtitleLayout
         for (int i = 0; i < lineCount; i++)
             rows[i] = startRow + i * LineSpacing;
         return rows;
+    }
+
+    /// <summary>
+    /// Rows for a set of lines: their own <see cref="SubtitleLine.Row"/> if every line has one
+    /// (as in EBU STL files), otherwise laid out by the style's vertical position.
+    /// </summary>
+    public static bool TryGetRows(
+        IReadOnlyList<SubtitleLine> lines,
+        VerticalPosition position,
+        [NotNullWhen(true)] out int[]? rows,
+        [NotNullWhen(false)] out string? error)
+    {
+        rows = null;
+        int withRow = lines.Count(l => l.Row is not null);
+
+        if (withRow == 0)
+        {
+            if (lines.Count is < 1 or > MaxLines)
+            {
+                error = $"A subtitle must have 1-{MaxLines} lines, not {lines.Count}.";
+                return false;
+            }
+
+            rows = GetRows(lines.Count, position);
+            error = null;
+            return true;
+        }
+
+        if (withRow != lines.Count)
+        {
+            error = "Either every line or no line must have a row number.";
+            return false;
+        }
+
+        rows = lines.Select(l => l.Row!.Value).ToArray();
+        for (int i = 0; i < rows.Length; i++)
+        {
+            if (rows[i] is < NewforPackets.MinRow or > NewforPackets.MaxRow)
+            {
+                error = $"Row {rows[i]} is off screen; rows must be {NewforPackets.MinRow}-{NewforPackets.MaxRow}.";
+                return false;
+            }
+
+            if (i > 0 && rows[i] <= rows[i - 1])
+            {
+                error = $"Rows must go down the screen, but row {rows[i]} follows row {rows[i - 1]}.";
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
     }
 }

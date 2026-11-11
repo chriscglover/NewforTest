@@ -10,24 +10,29 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        // Subtitle text is full of curly quotes, accents and £ signs: don't let the console mangle them
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+
         if (!CliOptions.TryParse(args, out var options, out var error))
         {
             Console.Error.WriteLine($"Error: {error}");
-            Console.Error.WriteLine();
-            CliOptions.PrintUsage(Console.Error);
-            return 2;
+            Console.Error.WriteLine("Run NewforTest --help for usage.");
+            return ExitCodes.BadInput;
         }
 
         if (options.ShowHelp)
         {
             CliOptions.PrintUsage(Console.Out);
-            return 0;
+            return ExitCodes.Success;
         }
+
+        if (options.Mode != RunMode.Interactive)
+            return HeadlessRunner.Run(options);
 
         if (Console.IsInputRedirected || Console.IsOutputRedirected)
         {
-            Console.Error.WriteLine("NewforTest needs an interactive console.");
-            return 2;
+            Console.Error.WriteLine("The interactive console needs a terminal. For scripts use --send, --clear, --play or --soak.");
+            return ExitCodes.BadInput;
         }
 
         // Prompt for anything not given on the command line
@@ -41,8 +46,8 @@ internal static class Program
             (string s, out PageNumber v, out string? e) => PageNumber.TryParse(s, out v, out e));
 
         using var client = new NewforClient(host, port);
-        new InteractiveSession(client, page, options.HexDump).Run();
-        return 0;
+        new InteractiveSession(client, page, options).Run();
+        return ExitCodes.Success;
     }
 
     /// <summary>Asks for a value until a valid one is entered; Enter alone takes the default.</summary>
@@ -60,4 +65,11 @@ internal static class Program
             Console.WriteLine($"  {error}");
         }
     }
+}
+
+internal static class ExitCodes
+{
+    public const int Success = 0;
+    public const int ConnectionFailed = 1;
+    public const int BadInput = 2;
 }

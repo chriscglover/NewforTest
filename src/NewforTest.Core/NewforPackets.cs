@@ -78,16 +78,20 @@ public static class NewforPackets
     /// CONNECT → CLEAR → BUILD (one per row, first with the clear bit) → REVEAL.
     /// </summary>
     /// <exception cref="ArgumentException">Too many lines, or a line too long for one row.</exception>
-    public static IReadOnlyList<NewforPacket> Subtitle(PageNumber page, IReadOnlyList<string> lines, SubtitleStyle style)
+    public static IReadOnlyList<NewforPacket> Subtitle(PageNumber page, IReadOnlyList<string> lines, SubtitleStyle style) =>
+        Subtitle(page, SubtitleText.ToLines(lines), style);
+
+    /// <inheritdoc cref="Subtitle(PageNumber, IReadOnlyList{string}, SubtitleStyle)"/>
+    public static IReadOnlyList<NewforPacket> Subtitle(PageNumber page, IReadOnlyList<SubtitleLine> lines, SubtitleStyle style)
     {
         if (!SubtitleText.TryValidate(lines, style, out string? error))
-            throw new ArgumentException(error, nameof(lines));
+            throw new ArgumentException(error); // no parameter name: the message is shown to users
 
-        int[] rows = SubtitleLayout.GetRows(lines.Count, style.Position);
+        SubtitleLayout.TryGetRows(lines, style.Position, out int[]? rows, out _);
 
         var packets = new List<NewforPacket>(lines.Count + 3) { Connect(page), Clear() };
         for (int i = 0; i < lines.Count; i++)
-            packets.Add(Build(rows[i], SubtitleRowBuilder.Build(lines[i], style), clearScreen: i == 0));
+            packets.Add(Build(rows![i], SubtitleRowBuilder.Build(lines[i], style), clearScreen: i == 0));
         packets.Add(Reveal());
 
         return packets;

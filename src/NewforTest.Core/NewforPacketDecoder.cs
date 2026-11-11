@@ -14,7 +14,7 @@ public static class NewforPacketDecoder
     /// Describes one packet. The first line is a summary; BUILD packets add one line per row
     /// showing its text, with control codes in braces, e.g. <c>{DH} {SB}{SB}{Yellow} HELLO{EB}{EB}</c>.
     /// </summary>
-    public static IReadOnlyList<string> Describe(ReadOnlySpan<byte> packet)
+    public static IReadOnlyList<string> Describe(ReadOnlySpan<byte> packet, TeletextCharacterSet? characterSet = null)
     {
         if (packet.IsEmpty)
             return new[] { "(empty packet)" };
@@ -22,7 +22,7 @@ public static class NewforPacketDecoder
         return packet[0] switch
         {
             NewforPackets.ConnectCode => new[] { DescribeConnect(packet) },
-            NewforPackets.BuildCode or 0x0F => DescribeBuild(packet),
+            NewforPackets.BuildCode or 0x0F => DescribeBuild(packet, characterSet),
             NewforPackets.RevealCode => new[] { "REVEAL" + Extra(packet, 1) },
             NewforPackets.ClearCode or 0x18 => new[] { "CLEAR" + Extra(packet, 1) },
             _ => new[] { $"Unknown packet type 0x{packet[0]:X2} ({packet.Length} bytes)" },
@@ -32,9 +32,11 @@ public static class NewforPacketDecoder
     /// <summary>
     /// Shows a row's 40 bytes as text with control codes in braces. Trailing spaces are dropped.
     /// Bytes with even parity (which a receiver would treat as errors) are counted at the end.
+    /// Characters are shown as they'd appear with the given national option (default English).
     /// </summary>
-    public static string DescribeRow(ReadOnlySpan<byte> data)
+    public static string DescribeRow(ReadOnlySpan<byte> data, TeletextCharacterSet? characterSet = null)
     {
+        characterSet ??= TeletextCharacterSet.English;
         var text = new StringBuilder();
         int evenParity = 0;
 
@@ -44,7 +46,7 @@ public static class NewforPacketDecoder
                 evenParity++;
 
             int code = b & 0x7F;
-            text.Append(code >= 0x20 ? ((char)code).ToString() : $"{{{ControlName(code)}}}");
+            text.Append(code >= 0x20 ? characterSet.Decode((byte)code).ToString() : $"{{{ControlName(code)}}}");
         }
 
         string result = text.ToString().TrimEnd();
@@ -69,7 +71,7 @@ public static class NewforPacketDecoder
         return $"CONNECT page {magazine}{tens:X}{units:X}" + zero + Extra(packet, 5);
     }
 
-    private static string[] DescribeBuild(ReadOnlySpan<byte> packet)
+    private static string[] DescribeBuild(ReadOnlySpan<byte> packet, TeletextCharacterSet? characterSet)
     {
         if (packet.Length < 2 || !Teletext.TryDecodeHamming84(packet[1], out int subtitleData))
             return new[] { "BUILD (subtitle data byte missing or not valid Hamming 8/4)" };
@@ -101,7 +103,7 @@ public static class NewforPacketDecoder
                 break;
             }
 
-            rowTexts.Add($"row {rowName,2}: {DescribeRow(packet.Slice(start + 2, Teletext.RowLength))}");
+            rowTexts.Add($"row {rowName,2}: {DescribeRow(packet.Slice(start + 2, Teletext.RowLength), characterSet)}");
         }
 
         string rows = rowCount == 1 ? $"row {string.Join(", ", rowNumbers)}" : $"{rowCount} rows ({string.Join(", ", rowNumbers)})";

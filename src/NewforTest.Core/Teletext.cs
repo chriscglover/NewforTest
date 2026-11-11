@@ -72,16 +72,4 @@ public static class Teletext
         int data = value & 0x7F;
         return (byte)(BitOperations.PopCount((uint)data) % 2 == 0 ? data | 0x80 : data);
     }
-
-    /// <summary>
-    /// Converts a character to its 7-bit teletext code (before parity). Printable ASCII passes
-    /// through unchanged; '£' maps to 0x23 (its position in the UK G0 set); anything else
-    /// becomes '?'. Full national character set mapping is a planned feature.
-    /// </summary>
-    public static byte EncodeCharacter(char c) => c switch
-    {
-        >= ' ' and <= '~' => (byte)c,
-        '£' => 0x23,
-        _ => (byte)'?',
-    };
 }
