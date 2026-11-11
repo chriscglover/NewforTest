@@ -78,13 +78,14 @@ public class SubtitleRowBuilderTests
     }
 
     [Fact]
-    public void Row_starts_with_height_code_then_colour_after_box()
+    public void Row_is_height_then_colour_then_box_then_text()
     {
         byte[] row = SubtitleRowBuilder.Build("HI", new SubtitleStyle(TeletextColor.Yellow, DoubleHeight: true, Boxed: true));
 
         Assert.Equal(Teletext.DoubleHeight, row[0]);
-        Assert.Equal(Teletext.StartBox, row[6]);
-        Assert.Equal(Teletext.StartBox, row[7]);
-        Assert.Equal(Teletext.OddParity((byte)TeletextColor.Yellow), row[8]);
+        Assert.Equal(Teletext.OddParity((byte)TeletextColor.Yellow), row[1]);
+        Assert.Equal(Teletext.StartBox, row[2]);
+        Assert.Equal(Teletext.StartBox, row[3]);
+        Assert.Equal((byte)'H', row[4] & 0x7F);
     }
 }

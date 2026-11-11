@@ -125,9 +125,9 @@ public class RowLayoutTests
     }
 
     [Theory]
-    [InlineData(true, 10)]
-    [InlineData(false, 8)]
-    public void Left_justified_short_text_keeps_the_v3_4_column(bool boxed, int column) =>
+    [InlineData(true, 4)]  // [height][colour][SB][SB]text
+    [InlineData(false, 2)] // [height][colour]text
+    public void Left_justified_text_starts_against_the_left_edge(bool boxed, int column) =>
         Assert.Equal(column, TextStart(SubtitleRowBuilder.Build("HELLO", new SubtitleStyle(Boxed: boxed)), "HELLO"));
 
     [Theory]
@@ -142,15 +142,31 @@ public class RowLayoutTests
     }
 
     [Fact]
-    public void Right_mirrors_left()
+    public void Right_justified_box_ends_against_the_right_edge()
     {
-        // Boxed left: box starts 8 columns in, so boxed right ends 8 columns from the edge
+        // Text ends in column 37, End Box in 38 and 39: nothing after
         byte[] row = SubtitleRowBuilder.Build("HELLO", new SubtitleStyle(Justification: Justification.Right));
         int start = TextStart(row, "HELLO");
-        Assert.Equal(30 - 5, start);
-        Assert.Equal(Teletext.OddParity(Teletext.EndBox), row[start + 5]);
-        Assert.Equal(Teletext.OddParity(Teletext.EndBox), row[start + 6]);
-        Assert.All(row[(start + 7)..], b => Assert.Equal(Teletext.Padding, b));
+        Assert.Equal(38 - 5, start);
+        Assert.Equal(Teletext.OddParity(Teletext.EndBox), row[38]);
+        Assert.Equal(Teletext.OddParity(Teletext.EndBox), row[39]);
+
+        byte[] unboxed = SubtitleRowBuilder.Build("HELLO", new SubtitleStyle(Boxed: false, Justification: Justification.Right));
+        Assert.Equal(40 - 5, TextStart(unboxed, "HELLO"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Left_centre_and_right_put_text_in_clearly_different_places(bool boxed)
+    {
+        // The bug this replaced: for a typical line all three started within a column of each other
+        const string text = "THIS IS A SINGLE LINE";
+        int Start(Justification j) => TextStart(SubtitleRowBuilder.Build(text, new SubtitleStyle(Boxed: boxed, Justification: j)), text);
+
+        int left = Start(Justification.Left), centre = Start(Justification.Centre), right = Start(Justification.Right);
+        Assert.True(centre - left >= 5, $"left {left}, centre {centre}");
+        Assert.True(right - centre >= 5, $"centre {centre}, right {right}");
     }
 
     [Fact]
@@ -159,10 +175,12 @@ public class RowLayoutTests
         string text = new('X', 34);
         byte[] row = SubtitleRowBuilder.Build(text, new SubtitleStyle(Boxed: true));
 
-        // [height] [SB][SB] [colour] text [EB][EB]: no spaces left
+        // [height] [colour] [SB][SB] text [EB][EB]: no room for spaces, whatever the justification
         Assert.Equal(Teletext.NormalHeight, row[0] & 0x7F);
-        Assert.Equal(Teletext.StartBox, row[1] & 0x7F);
+        Assert.Equal((byte)TeletextColor.White, row[1] & 0x7F);
+        Assert.Equal(Teletext.StartBox, row[2] & 0x7F);
         Assert.Equal(4, TextStart(row, text));
+        Assert.Equal(row, SubtitleRowBuilder.Build(text, new SubtitleStyle(Boxed: true, Justification: Justification.Right)));
     }
 
     [Fact]
@@ -205,7 +223,7 @@ public class RowLayoutTests
     {
         var line = SubtitleLine.Text("HELLO") with { Justification = Justification.Centre };
         byte[] row = SubtitleRowBuilder.Build(line, new SubtitleStyle(Justification: Justification.Left));
-        Assert.NotEqual(10, TextStart(row, "HELLO"));
+        Assert.NotEqual(4, TextStart(row, "HELLO")); // 4 = left
     }
 
     [Fact]
@@ -237,6 +255,21 @@ public class RowLayoutTests
 
         int start = Array.FindIndex(row, b => (b & 0x7F) != 0x20);
         Assert.Equal((40 - 6) / 2, start);
+    }
+
+    [Fact]
+    public void Raw_row_left_and_right_go_to_the_edges()
+    {
+        // As an STL row with JC 1 or 3: authored spacing dropped, controls kept next to the text
+        byte[] codes = { 0x20, 0x20, 0x0D, 0x03, 0x0B, 0x0B, (byte)'H', (byte)'I', 0x0A, 0x0A, 0x20 };
+
+        byte[] left = SubtitleRowBuilder.Build(SubtitleLine.FromRaw(codes) with { Justification = Justification.Left }, new SubtitleStyle());
+        Assert.Equal(Teletext.DoubleHeight, left[0]);
+        Assert.Equal((byte)'H', left[4] & 0x7F);
+
+        byte[] right = SubtitleRowBuilder.Build(SubtitleLine.FromRaw(codes) with { Justification = Justification.Right }, new SubtitleStyle());
+        Assert.Equal((byte)'I', right[37] & 0x7F);
+        Assert.Equal(Teletext.OddParity(Teletext.EndBox), right[39]);
     }
 
     [Fact]

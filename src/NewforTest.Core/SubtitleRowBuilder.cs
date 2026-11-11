@@ -8,17 +8,16 @@ namespace NewforTest.Core;
 /// <remarks>
 /// Text row layout (all bytes odd parity apart from the padding):
 /// <code>
-/// [height] [space] [leading spaces] ([SB][SB]) [colour] [space] text ([EB][EB]) [padding...]
+/// [height] [spaces] [colour] ([SB][SB]) text ([EB][EB]) [padding...]
 /// </code>
-/// The text's start column comes from the justification. Short Left-justified text gets
-/// exactly the v3.4 layout (4 leading spaces). Longer text eats into the leading spaces, then
-/// the two optional single spaces, so up to 34 characters fit boxed (38 unboxed).
-/// Mid-line colour changes take one cell each; a space next to the change is reused for it.
+/// The spaces position the text: none for Left (box against the left edge, text in column 4),
+/// as many as fit for Right (End Box codes in columns 38-39), and enough to centre the box for
+/// Centre. The box shows one cell of margin each side of the text. Up to 34 characters fit
+/// boxed (38 unboxed). Mid-line colour changes take one cell each; a space next to the change
+/// is reused for it.
 /// </remarks>
 public static class SubtitleRowBuilder
 {
-    private const int PreferredLeadingSpaces = 4;
-
     /// <summary>Longest text (in cells) that fits on one row: 34 boxed, 38 unboxed.</summary>
     public static int MaxTextLength(bool boxed) => Teletext.RowLength - MinimumPrefix(boxed) - Suffix(boxed);
 
@@ -112,35 +111,29 @@ public static class SubtitleRowBuilder
             return false;
         }
 
-        int leftStart = minPrefix + 2 + PreferredLeadingSpaces; // 10 boxed, 8 unboxed: the v3.4 layout
+        // Left puts the box against the left edge, Right against the right edge; Centre centres
+        // the visible box (second Start Box cell to first End Box cell), or the text if unboxed.
         int desiredStart = (line.Justification ?? style.Justification) switch
         {
+            Justification.Centre when boxed => (Teletext.RowLength - (cells.Length + 2)) / 2 + 1,
             Justification.Centre => (Teletext.RowLength - cells.Length) / 2,
-            Justification.Right => Teletext.RowLength - leftStart - cells.Length,
-            _ => leftStart,
+            Justification.Right => latestStart,
+            _ => minPrefix,
         };
 
         int start = Math.Clamp(desiredStart, minPrefix, latestStart);
-        int extra = start - minPrefix;
-        bool spaceAfterColour = extra >= 1;
-        bool spaceAfterHeight = extra >= 2;
-        int leadingSpaces = extra - (spaceAfterColour ? 1 : 0) - (spaceAfterHeight ? 1 : 0);
 
         var bytes = new List<byte>(Teletext.RowLength);
 
         // Height must come first: it applies from this position to the end of the row
         bytes.Add(style.DoubleHeight ? Teletext.DoubleHeight : Teletext.NormalHeight);
-        if (spaceAfterHeight)
-            bytes.Add(Teletext.Space);
-        bytes.AddRange(Enumerable.Repeat(Teletext.Space, leadingSpaces));
+        bytes.AddRange(Enumerable.Repeat(Teletext.Space, start - minPrefix));
 
-        // Start Box is sent twice, as WST requires
-        if (boxed)
-            bytes.AddRange(new[] { Teletext.StartBox, Teletext.StartBox });
-
+        // Colour before the box, as broadcast STL files do, so the box has one cell of margin
+        // each side: Start Box and End Box both take effect after their own cell
         bytes.Add((byte)lineColor);
-        if (spaceAfterColour)
-            bytes.Add(Teletext.Space);
+        if (boxed)
+            bytes.AddRange(new[] { Teletext.StartBox, Teletext.StartBox }); // sent twice, as WST requires
 
         bytes.AddRange(cells);
 
@@ -194,11 +187,12 @@ public static class SubtitleRowBuilder
             var trail = cells[(lastText + 1)..].Where(b => b < Teletext.Space).ToList();
             var text = cells[firstText..(lastText + 1)];
 
+            // As for text lines: Left and Right go to the edges of the row
             int textStart = justification switch
             {
                 Justification.Centre => (Teletext.RowLength - text.Length) / 2,
-                Justification.Right => Teletext.RowLength - 1 - trail.Count - text.Length,
-                _ => lead.Count + 1,
+                Justification.Right => Teletext.RowLength - trail.Count - text.Length,
+                _ => lead.Count,
             };
             textStart = Math.Clamp(textStart, lead.Count, Math.Max(lead.Count, Teletext.RowLength - trail.Count - text.Length));
 

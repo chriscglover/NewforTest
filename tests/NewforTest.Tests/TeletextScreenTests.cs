@@ -77,16 +77,16 @@ public class TeletextScreenTests
     }
 
     [Fact]
-    public void Box_starts_at_the_second_start_box_and_ends_at_the_first_end_box()
+    public void Box_has_one_cell_of_margin_each_side_of_the_text()
     {
-        // Matches the live receiver (measured from a capture): Start Box and End Box both take
-        // effect after their own cell, so the box covers SB2, colour, space, text, EB1
+        // Start Box and End Box both take effect after their own cell (confirmed on the live
+        // receiver), so with the colour before the box it covers SB2, the text, and EB1
         var row = Show("HI").Render()[22];
         int first = Array.FindIndex(row, c => c.Boxed);
         int last = Array.FindLastIndex(row, c => c.Boxed);
         int text = Array.FindIndex(row, c => c.Char == 'H');
 
-        Assert.Equal(text - 3, first);
+        Assert.Equal(text - 1, first);
         Assert.Equal(text + 2, last); // "HI" then the first End Box cell
     }
 
