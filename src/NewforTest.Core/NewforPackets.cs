@@ -80,6 +80,9 @@ public static class NewforPackets
     /// <exception cref="ArgumentException">Too many lines, or a line too long for one row.</exception>
     public static IReadOnlyList<NewforPacket> Subtitle(PageNumber page, IReadOnlyList<string> lines, SubtitleStyle style)
     {
+        if (!SubtitleText.TryValidate(lines, style, out string? error))
+            throw new ArgumentException(error, nameof(lines));
+
         int[] rows = SubtitleLayout.GetRows(lines.Count, style.Position);
 
         var packets = new List<NewforPacket>(lines.Count + 3) { Connect(page), Clear() };

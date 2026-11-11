@@ -41,7 +41,7 @@ internal static class Program
             (string s, out PageNumber v, out string? e) => PageNumber.TryParse(s, out v, out e));
 
         using var client = new NewforClient(host, port);
-        new InteractiveSession(client, page).Run();
+        new InteractiveSession(client, page, options.HexDump).Run();
         return 0;
     }
 

@@ -7,7 +7,7 @@ using NewforTest.Core;
 namespace NewforTest.Cli;
 
 /// <summary>Command-line arguments. Values left null are prompted for interactively.</summary>
-internal sealed record CliOptions(string? Host, int? Port, PageNumber? Page, bool ShowHelp)
+internal sealed record CliOptions(string? Host, int? Port, PageNumber? Page, bool HexDump, bool ShowHelp)
 {
     public const string DefaultHost = "127.0.0.1";
     public const int DefaultPort = 1234;
@@ -23,6 +23,7 @@ internal sealed record CliOptions(string? Host, int? Port, PageNumber? Page, boo
         int? port = null;
         PageNumber? page = null;
         bool help = false;
+        bool hexDump = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -31,6 +32,12 @@ internal sealed record CliOptions(string? Host, int? Port, PageNumber? Page, boo
             if (arg is "-h" or "--help" or "/?")
             {
                 help = true;
+                continue;
+            }
+
+            if (arg == "--hex")
+            {
+                hexDump = true;
                 continue;
             }
 
@@ -67,7 +74,7 @@ internal sealed record CliOptions(string? Host, int? Port, PageNumber? Page, boo
             }
         }
 
-        options = new CliOptions(host, port, page, help);
+        options = new CliOptions(host, port, page, hexDump, help);
         error = null;
         return true;
     }
@@ -86,11 +93,12 @@ internal sealed record CliOptions(string? Host, int? Port, PageNumber? Page, boo
 
     public static void PrintUsage(TextWriter writer)
     {
-        writer.WriteLine("Usage: NewforTest [--ip <address>] [--port <port>] [--page <page>]");
+        writer.WriteLine("Usage: NewforTest [--ip <address>] [--port <port>] [--page <page>] [--hex]");
         writer.WriteLine();
         writer.WriteLine($"  --ip, --host <address>  Subtitle inserter address    (default {DefaultHost})");
         writer.WriteLine($"  --port <port>           TCP port, 1-65535             (default {DefaultPort})");
         writer.WriteLine($"  --page <page>           Teletext page, e.g. 888, 1FF  (default {DefaultPage})");
+        writer.WriteLine("  --hex                   Start with the packet hex dump on ([V] toggles it)");
         writer.WriteLine("  -h, --help              Show this help");
         writer.WriteLine();
         writer.WriteLine("Anything not given is prompted for.");

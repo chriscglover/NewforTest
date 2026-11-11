@@ -6,12 +6,13 @@ namespace NewforTest.Cli;
 
 /// <summary>
 /// The keyboard-driven test console. The screen is redrawn in place after every key: the menu
-/// and status at the top, then as many recent log lines as fit, with the bottom line kept free
-/// for prompts. Nothing scrolls, so the status line can't be overwritten or pushed off screen.
+/// and status at the top, then a scrollable log, with the bottom line kept free for prompts.
+/// Nothing scrolls the console itself, so the status line can't be overwritten or pushed off screen.
 /// </summary>
 internal sealed class InteractiveSession
 {
-    private const int MaxLogEntries = 500;
+    private const int MaxLogEntries = 5000;
+    private const string DetailIndent = "     ";
 
     private static readonly string Version =
         typeof(InteractiveSession).Assembly.GetName().Version?.ToString(2) ?? "?";
@@ -38,13 +39,20 @@ internal sealed class InteractiveSession
     private readonly List<string> _log = new();
     private PageNumber _page;
     private SubtitleStyle _style = new();
+    private bool _hexDump;
+    private string[]? _customLines;
+
     private bool _clearScreen = true;
     private (int Width, int Height) _lastSize;
+    private int _logScroll; // lines scrolled back from the newest entry
+    private int _logPageSize = 10;
 
-    public InteractiveSession(NewforClient client, PageNumber page)
+    public InteractiveSession(NewforClient client, PageNumber page, bool hexDump)
     {
         _client = client;
         _page = page;
+        _hexDump = hexDump;
+        _client.PacketSent += OnPacketSent;
     }
 
     public void Run()
@@ -106,6 +114,10 @@ internal sealed class InteractiveSession
             case ConsoleKey.H:
                 _style = _style with { DoubleHeight = !_style.DoubleHeight };
                 break;
+            case ConsoleKey.V:
+                _hexDump = !_hexDump;
+                Log($"Hex dump {(_hexDump ? "on" : "off")}.");
+                break;
 
             case ConsoleKey.T:
                 _style = _style with { Position = VerticalPosition.Top };
@@ -118,13 +130,22 @@ internal sealed class InteractiveSession
                 break;
 
             case ConsoleKey.D1 or ConsoleKey.NumPad1:
-                SendTestSubtitle(1);
+                SendSubtitle(TestSubtitles[0]);
                 break;
             case ConsoleKey.D2 or ConsoleKey.NumPad2:
-                SendTestSubtitle(2);
+                SendSubtitle(TestSubtitles[1]);
                 break;
             case ConsoleKey.D3 or ConsoleKey.NumPad3:
-                SendTestSubtitle(3);
+                SendSubtitle(TestSubtitles[2]);
+                break;
+            case ConsoleKey.E:
+                EnterCustomText();
+                break;
+            case ConsoleKey.D4 or ConsoleKey.NumPad4:
+                if (_customLines is null)
+                    Log("No custom text yet. Press [E] to enter some.");
+                else
+                    SendSubtitle(_customLines);
                 break;
 
             case ConsoleKey.C:
@@ -136,17 +157,29 @@ internal sealed class InteractiveSession
             case ConsoleKey.O:
                 Reconnect();
                 break;
+
+            case ConsoleKey.PageUp:
+                _logScroll += _logPageSize;
+                break;
+            case ConsoleKey.PageDown:
+                _logScroll = Math.Max(0, _logScroll - _logPageSize);
+                break;
+            case ConsoleKey.Home:
+                _logScroll = int.MaxValue; // clamped when rendering
+                break;
+            case ConsoleKey.End:
+                _logScroll = 0;
+                break;
         }
     }
 
-    private void SendTestSubtitle(int lineCount)
+    private void SendSubtitle(string[] lines)
     {
-        var lines = TestSubtitles[lineCount - 1];
         var style = _style;
         var page = _page;
         Execute(
             () => _client.SendSubtitle(page, lines, style),
-            $"Sent {lineCount}-line subtitle to page {page} ({Describe(style)}).");
+            $"Sent to page {page} ({Describe(style)}): {SubtitleText.Join(lines)}");
     }
 
     /// <summary>Runs a send, logging success or the reason it failed.</summary>
@@ -170,6 +203,40 @@ internal sealed class InteractiveSession
         catch (ArgumentException ex)
         {
             Log($"ERROR: {ex.Message}");
+        }
+    }
+
+    private void EnterCustomText()
+    {
+        while (true)
+        {
+            int max = SubtitleRowBuilder.MaxTextLength(_style.Boxed);
+            string? input = PromptLine($" Text ({SubtitleText.LineSeparator} = new line, max {max}): ");
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                Log("Custom text cancelled.");
+                return;
+            }
+
+            string[] lines = SubtitleText.Split(input);
+            if (!SubtitleText.TryValidate(lines, _style, out string? error))
+            {
+                Log($"ERROR: {error} Try again, or Enter to cancel.");
+                Render();
+                continue;
+            }
+
+            var unsupported = input
+                .Where(c => c != SubtitleText.LineSeparator && c != '?' && Teletext.EncodeCharacter(c) == '?')
+                .Distinct()
+                .ToArray();
+            if (unsupported.Length > 0)
+                Log($"Warning: not in the teletext character set, sent as '?': {string.Join(" ", unsupported)}");
+
+            _customLines = lines;
+            SendSubtitle(lines);
+            return;
         }
     }
 
@@ -222,15 +289,29 @@ internal sealed class InteractiveSession
         Console.SetCursorPosition(0, Math.Max(0, Console.WindowHeight - 1));
         Console.Write(prompt);
         string? input = Console.ReadLine();
-        _clearScreen = true; // the Enter key may have scrolled the window
+        _clearScreen = true; // the Enter key, or a long entry wrapping, may have scrolled the window
         return input;
     }
 
-    private void Log(string message)
+    private void OnPacketSent(NewforPacket packet)
     {
-        _log.Add($"{DateTime.Now:HH:mm:ss} | {message}");
+        if (!_hexDump)
+            return;
+
+        var description = NewforPacketDecoder.Describe(packet.Bytes);
+        Log($"TX {description[0]}");
+        foreach (string line in description.Skip(1).Concat(HexDump.Format(packet.Bytes)))
+            AddLogLine(DetailIndent + line);
+    }
+
+    private void Log(string message) => AddLogLine($"{DateTime.Now:HH:mm:ss} | {message}");
+
+    private void AddLogLine(string line)
+    {
+        _log.Add(line);
         if (_log.Count > MaxLogEntries)
             _log.RemoveRange(0, _log.Count - MaxLogEntries);
+        _logScroll = 0; // jump back to the newest entries
     }
 
     private void Render()
@@ -246,8 +327,8 @@ internal sealed class InteractiveSession
         }
 
         string rule = new('=', 63);
-        string thinRule = new('-', 63);
         string connection = _client.IsConnected ? "CONNECTED" : "DISCONNECTED";
+        string custom = _customLines is null ? "(none)" : SubtitleText.Join(_customLines);
 
         var lines = new List<string>
         {
@@ -255,24 +336,30 @@ internal sealed class InteractiveSession
             rule,
             $" Target: {_client.Host}:{_client.Port} [{connection}]  |  Page: {_page}",
             rule,
-            "",
             " COLOR:      [R] Red     [G] Green   [Y] Yellow  [B] Blue",
             "             [M] Magenta [A] Cyan    [W] White",
-            " OPTIONS:    [X] Toggle Box   [H] Toggle Double Height",
+            " OPTIONS:    [X] Toggle Box  [H] Toggle Double Height  [V] Toggle Hex Dump",
             " POSITION:   [T] Top     [N] Middle  [L] Lower",
             " SUBTITLES:  [1] Single Line  [2] Two Lines  [3] Three Lines",
+            $"             [E] Enter Text   [4] Resend: {custom}",
             " ACTIONS:    [C] Clear  [P] Change Page  [O] Reconnect  [Q] Quit",
-            "",
-            thinRule,
+            new string('-', 63),
             $" Color: {_style.Color,-7} | Box: {(_style.Boxed ? "ON" : "OFF"),-3} | " +
             $"Height: {(_style.DoubleHeight ? "DOUBLE" : "SINGLE"),-6} | " +
-            $"Position: {_style.Position.ToString().ToUpperInvariant(),-6}",
-            thinRule,
+            $"Position: {_style.Position.ToString().ToUpperInvariant(),-6} | Hex: {(_hexDump ? "ON" : "OFF")}",
         };
 
-        // Fill the rest of the screen (minus the prompt line) with the newest log entries
-        int logRows = Math.Max(0, height - 1 - lines.Count);
-        lines.AddRange(_log.Skip(Math.Max(0, _log.Count - logRows)));
+        // The rest of the screen, minus the log title and the prompt line, shows the log
+        int logRows = Math.Max(0, height - 2 - lines.Count);
+        _logPageSize = Math.Max(1, logRows - 1);
+        _logScroll = Math.Clamp(_logScroll, 0, Math.Max(0, _log.Count - logRows));
+
+        lines.Add(_logScroll == 0
+            ? "--- LOG ([PgUp]/[PgDn] scroll) " + new string('-', 32)
+            : $"--- LOG (back {_logScroll} lines, [End] for latest) " + new string('-', 20));
+
+        int first = Math.Max(0, _log.Count - logRows - _logScroll);
+        lines.AddRange(_log.Skip(first).Take(logRows));
 
         for (int row = 0; row < height; row++)
         {

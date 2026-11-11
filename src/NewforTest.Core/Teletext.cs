@@ -53,6 +53,19 @@ public static class Teletext
         return Hamming84Table[nibble];
     }
 
+    /// <summary>
+    /// Decodes a Hamming 8/4 byte. Only exact code words are accepted (no single-bit error
+    /// correction), since this is for checking what we send, not receiving off-air.
+    /// </summary>
+    public static bool TryDecodeHamming84(byte value, out int nibble)
+    {
+        nibble = Array.IndexOf(Hamming84Table, value);
+        return nibble >= 0;
+    }
+
+    /// <summary>True if the byte has odd parity, as every WST display byte should.</summary>
+    public static bool HasOddParity(byte value) => BitOperations.PopCount(value) % 2 == 1;
+
     /// <summary>Sets bit 7 where needed so the byte has an odd number of 1 bits.</summary>
     public static byte OddParity(byte value)
     {
